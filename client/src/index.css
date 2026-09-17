@@ -533,20 +533,52 @@ p {
   }
 
   /* Responsive Grid Adaptations: Force ALL multi-column grids to single column on mobile */
-  div[style*="gridTemplateColumns"] {
-    grid-template-columns: 1fr !important;
-  }
-
+  div[style*="grid-template-columns"],
+  div[style*="gridTemplateColumns"],
+  .home-triad-grid,
+  .home-attention-grid,
+  .home-projects-grid,
   .card-grid-2,
   .card-grid-3,
   .card-grid-4 {
     grid-template-columns: 1fr !important;
   }
 
+  .topbar-isolation-badge {
+    display: none !important;
+  }
+
   /* Touch Target Ergonomics */
   .btn {
     min-height: 38px;
   }
+}
+
+/* Core responsive layout classes */
+.home-triad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.home-attention-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.home-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.topbar-isolation-badge {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Small Smartphone & Android Screens (<= 480px - e.g., Galaxy, Redmi, Moto) */

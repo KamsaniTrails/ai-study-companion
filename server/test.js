@@ -316,6 +316,29 @@ async function run() {
   const replayAttempt = emailService.verifyOtp('student@university.edu', testOtp);
   assert(replayAttempt.valid === false, 'Consumed OTP code cannot be replayed (single-use enforcement)');
 
+  console.log('\n[12. Strict Rubric Grading & Document Overview RAG]');
+  // Verify 'Hlo' produces failing score <= 15 and isCorrect === false
+  const hloEval = await aiProvider.generateStructured({
+    feature: 'assessment_grading',
+    prompt: 'Evaluate student response: "Hlo" Concept: Residual Connections'
+  });
+  assert(hloEval.data.isCorrect === false, 'Trivial greeting "Hlo" fails open-ended assessment');
+  assert(hloEval.data.aiScore <= 15, 'Trivial response receives failing score (<= 15%)');
+
+  // Verify full answer with mechanism passes
+  const goodEval = await aiProvider.generateStructured({
+    feature: 'assessment_grading',
+    prompt: 'Evaluate student response: "Residual connections add x to F(x) preventing vanishing gradients with identity derivative dH/dx = dF/dx + 1." Concept: Residual Connections'
+  });
+  assert(goodEval.data.isCorrect === true, 'Substantive mathematical answer passes assessment');
+  assert(goodEval.data.aiScore >= 80, 'Substantive mathematical answer achieves high score (>= 80%)');
+
+  // Verify document overview query in RAG retrieval succeeds
+  const overviewSearch = RetrievalEngine.search('project_transformers', 'Can you summarize what is in my uploaded notes?', 3);
+  assert(overviewSearch.hasSufficientEvidence === true, 'Document overview query produces sufficient evidence');
+  assert(overviewSearch.topChunks.length > 0, 'Document overview query returns grounded top chunks');
+  assert(overviewSearch.citations.length > 0, 'Document overview query returns valid citations');
+
   console.log('\n=======================================================');
   console.log(` SUMMARY: ${passed} / ${total} TESTS PASSED`);
   console.log('=======================================================\n');

@@ -251,7 +251,7 @@ export const App = () => {
               <span>System Live</span>
             </div>
 
-            <span style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="topbar-isolation-badge">
               <Lock size={12} color="#94a3b8" />
               <span>Project-Level Data Isolation Enforced</span>
             </span>

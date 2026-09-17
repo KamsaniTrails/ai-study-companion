@@ -100,13 +100,28 @@ class DocumentProcessor {
 
       // Stage 3: Knowledge Extraction
       updateStage('knowledge', 70);
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 200));
 
-      const extractedConcepts = [
-        { name: 'Optimization Dynamics', description: 'Behavior of objective functions and loss gradients.', category: 'Optimization' },
-        { name: 'Convergence Theorems', description: 'Mathematical criteria ensuring gradient descent convergence.', category: 'Foundations' },
-        { name: 'Feature Representation', description: 'Latent space encoding and embeddings.', category: 'Representations' }
-      ];
+      // Dynamically extract concepts from document text
+      let extractedConcepts = [];
+      const headingMatches = fullText.match(/(?:^|\n)(?:#+\s*|Chapter\s+\d+:?\s*|Section\s+\d+:?\s*|\d+\.\s+)([A-Z][A-Za-z0-9\s]{3,35})(?:\n|$)/g);
+      if (headingMatches && headingMatches.length > 0) {
+        const uniqueTitles = Array.from(new Set(headingMatches.map((h) => h.replace(/^[#\d\.\s\:\n]+/, '').trim()))).slice(0, 5);
+        extractedConcepts = uniqueTitles.map((t) => ({
+          name: t,
+          description: `Core concepts and mechanisms covering ${t} from ${originalName}.`,
+          category: 'Document Topics'
+        }));
+      }
+
+      if (extractedConcepts.length === 0) {
+        const docBaseName = originalName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+        extractedConcepts = [
+          { name: `${docBaseName} Fundamentals`, description: `Fundamental principles and definitions in ${originalName}.`, category: 'Foundations' },
+          { name: `${docBaseName} Core Mechanisms`, description: `Operational mechanics and step-by-step methods in ${originalName}.`, category: 'Mechanics' },
+          { name: 'Optimization Dynamics', description: `Analytical evaluation and diagnostic criteria in ${originalName}.`, category: 'Analysis' }
+        ];
+      }
 
       for (const c of extractedConcepts) {
         let concept = db.findOne('concepts', (cp) => cp.project_id === projectId && cp.name === c.name);
@@ -135,25 +150,31 @@ class DocumentProcessor {
 
       // Stage 4: Indexing & Retrieval Representation
       updateStage('indexing', 88);
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 200));
 
       let chunkIndex = 0;
       for (const p of pageTexts) {
-        // Paragraph based semantic chunking
-        const paragraphs = p.text.split(/\n\s*\n/).filter((para) => para.trim().length > 30);
-        const chunks = paragraphs.length > 0 ? paragraphs : [p.text];
+        // Paragraph based semantic chunking with sentence/word block fallback
+        let chunks = p.text.split(/\n\s*\n/).map((c) => c.trim()).filter((para) => para.length > 25);
+        if (chunks.length === 0) {
+          const words = p.text.split(/\s+/);
+          const chunkSize = 120;
+          for (let w = 0; w < words.length; w += chunkSize) {
+            const block = words.slice(w, w + chunkSize).join(' ');
+            if (block.trim().length > 15) chunks.push(block.trim());
+          }
+        }
+        if (chunks.length === 0) chunks = [p.text.trim()];
 
         for (const chunkContent of chunks) {
           chunkIndex++;
-          //chunking
           db.insert('document_chunks', {
             id: `chk_${Date.now()}_${chunkIndex}`,
             material_id: materialId,
             project_id: projectId,
-            //saved exact page number
             page_number: p.page,
             content: chunkContent.trim(),
-            token_count: Math.max(10, Math.floor(chunkContent.length / 4)) // 50 to 150 tokens for each chunk 
+            token_count: Math.max(10, Math.floor(chunkContent.length / 4))
           });
         }
       }

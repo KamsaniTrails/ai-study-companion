@@ -4,10 +4,10 @@ const { v4: uuidv4 } = require('uuid');
 class AiProviderService {
   constructor() {
     this.config = {
-      provider: process.env.AI_PROVIDER || 'local',
+      provider: process.env.AI_PROVIDER || (process.env.GEMINI_API_KEY ? 'gemini' : 'local'),
       geminiApiKey: process.env.GEMINI_API_KEY || '',
       openaiApiKey: process.env.OPENAI_API_KEY || '',
-      defaultModel: 'gemini-3.1-pro-preview'
+      defaultModel: 'gemini-1.5-flash'
     };
   }
 
@@ -105,7 +105,8 @@ class AiProviderService {
   }
 
   async callGemini(options) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${this.config.geminiApiKey}`;
+    const model = options.modelOverride || this.config.defaultModel || 'gemini-1.5-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.config.geminiApiKey}`;
     const payload = {
       contents: [
         ...(options.systemPrompt ? [{ role: 'user', parts: [{ text: `SYSTEM INSTRUCTION:\n${options.systemPrompt}` }] }] : []),
@@ -120,7 +121,10 @@ class AiProviderService {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error(`Gemini API Error: ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Gemini API Error (${res.status}): ${errText.slice(0, 150)}`);
+    }
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
@@ -178,19 +182,50 @@ Here is your high-yield, exam-focused revision grounded in your materials:
 
     // 1. Assessment Rubric Grading
     if (options.feature === 'assessment_grading') {
-      const hasKeywords = promptLower.includes('gradient') || promptLower.includes('skip') || promptLower.includes('variance') || promptLower.includes('identity');
-      const score = hasKeywords ? 85 : 70;
+      let studentAns = options.studentAnswer || '';
+      if (!studentAns) {
+        const match = options.prompt.match(/Student Answer:\s*"([^"]*)"/i) ||
+          options.prompt.match(/Evaluate student (?:response|answer):\s*"([^"]*)"/i);
+        studentAns = match ? match[1] : '';
+      }
+      const ansTrimmed = studentAns.trim();
+      const ansLower = ansTrimmed.toLowerCase();
+      const isGreetingOrTrivial = /^(hlo|hello|hi|hey|test|yo|none|na|nil|ok|good|bad)\.?$/i.test(ansTrimmed);
+
+      if (ansTrimmed.length < 15 || isGreetingOrTrivial) {
+        return JSON.stringify({
+          isCorrect: false,
+          aiScore: 0,
+          understanding: 'No conceptual explanation provided. Response is too brief or off-topic.',
+          accuracy: '0% - Does not address the target concept or question.',
+          relevance: 'Irrelevant or minimal response.',
+          keyConceptsCovered: [],
+          missingConcepts: ['Core architectural mechanism'],
+          feedback: `Your response ("${studentAns || 'empty'}") does not address the question. Please provide an explanation explaining the underlying principles.`
+        });
+      }
+
+      // Evaluate student's answer text specifically (NOT the prompt text)
+      const hasKeywords = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('shortcut') || ansLower.includes('flow') || ansLower.includes('skip') || ansLower.includes('vanish') || ansLower.includes('+ 1') || ansLower.includes('+1');
+      const hasMath = ansLower.includes('dh/dx') || ansLower.includes('df/dx') || ansLower.includes('+ 1') || ansLower.includes('+1') || ansLower.includes('identity');
+
+      let score = 15;
+      if (hasKeywords && hasMath) score = 92;
+      else if (hasKeywords) score = 85;
+      else if (ansTrimmed.length > 40) score = 40;
+
+      const isCorrect = score >= 60;
       return JSON.stringify({
-        isCorrect: score >= 60,
+        isCorrect,
         aiScore: score,
-        understanding: score >= 80 ? 'Demonstrates thorough comprehension of gradient mechanics and structural bypass.' : 'Shows reasonable intuition, but lacks formal mathematical justification.',
-        accuracy: score >= 80 ? 'Accurate statement of identity derivatives.' : 'Partially accurate with simplified phrasing.',
+        understanding: score >= 80 ? 'Demonstrates thorough comprehension of gradient mechanics and structural bypass.' : 'Shows minimal intuition, missing key technical principles.',
+        accuracy: score >= 80 ? 'Accurate statement of identity bypass.' : 'Inaccurate or missing mechanism description.',
         relevance: 'Directly addresses the question prompt.',
-        keyConceptsCovered: ['Residual bypass', 'Gradient flow'],
-        missingConcepts: score < 85 ? ['Explicit mathematical derivative dH/dx = dF/dx + 1'] : [],
+        keyConceptsCovered: score >= 60 ? ['Residual bypass', 'Gradient flow'] : [],
+        missingConcepts: score < 85 ? ['Explicit mathematical derivative dH/dx = dF/dx + 1'] : ['Fundamental skip mechanism'],
         feedback: score >= 80
           ? 'Great job! You clearly stated how identity paths prevent gradient degradation.'
-          : 'Good explanation! To achieve full mastery, explicitly mention that the +1 identity derivative ensures the gradient cannot diminish to zero.'
+          : 'To achieve mastery, explain that the identity derivative (+1) ensures gradient flow cannot degrade to zero during backpropagation.'
       });
     }
 
@@ -228,6 +263,30 @@ Here is your high-yield, exam-focused revision grounded in your materials:
 According to our evidence-grounded principles, I only provide answers verified by your project resources rather than speculating.
 
 *Recommendation:* Upload relevant course notes or textbook chapters into this Project's Knowledge Hub.`;
+    }
+
+    // 4. Grounded Tutor Response: Synthesize directly from actual uploaded document knowledge if present
+    if (options.prompt.includes('=== 2. GROUNDED PROJECT KNOWLEDGE ===')) {
+      const knowledgeMatch = options.prompt.match(/=== 2\. GROUNDED PROJECT KNOWLEDGE ===\s*([\s\S]*?)(?=\n=== 3\.|\n\n=== RECENT|$)/);
+      const knowledgeText = knowledgeMatch ? knowledgeMatch[1].trim() : '';
+
+      if (knowledgeText && knowledgeText.length > 20) {
+        const sourceMatch = knowledgeText.match(/\[Source:\s*([^\—\]]+)\s*—\s*Page\s*(\d+)\]/);
+        const docName = sourceMatch ? sourceMatch[1].trim() : 'Project Notes';
+        const pageNum = sourceMatch ? sourceMatch[2].trim() : '1';
+
+        // Extract cleaned paragraphs from knowledge chunks
+        const cleanedLines = knowledgeText
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 20 && !l.startsWith('[Source:'));
+
+        const excerpts = cleanedLines.slice(0, 3);
+
+        return `Based on your course materials in **${docName}** (Page ${pageNum}):\n\n` +
+          excerpts.map((line, idx) => `**${idx + 1}. Key Insight:** ${line}`).join('\n\n') +
+          `\n\n**Application & Recommendation:** Review these notes in your Project Workspace to solidify these foundational mechanisms before your next adaptive practice drill.`;
+      }
     }
 
     // Default grounded tutor response

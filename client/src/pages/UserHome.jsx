@@ -214,7 +214,7 @@ export const UserHome = ({
       </div>
 
       {/* 2. Core Triad: Where was I? How am I doing? What should I do next? */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div className="home-triad-grid">
         {/* Card 1: Where was I? */}
         <div className="card-pro" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -313,8 +313,8 @@ export const UserHome = ({
         flexDirection: 'column',
         gap: 14
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <AlertCircle size={17} color="#e11d48" />
             <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>
               Areas Requiring Attention
@@ -326,7 +326,7 @@ export const UserHome = ({
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        <div className="home-attention-grid">
           {defaultAttentionConcepts.map((c) => (
             <div
               key={c.id}
@@ -380,7 +380,7 @@ export const UserHome = ({
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="home-projects-grid">
           {projects.map((proj) => (
             <div
               key={proj.id}

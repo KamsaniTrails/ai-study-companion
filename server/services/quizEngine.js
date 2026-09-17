@@ -120,29 +120,56 @@ class QuizEngine {
         };
       } else {
         // Open-ended rubric grading
-        try {
-          const res = await aiProvider.generateStructured({
-            feature: 'assessment_grading',
-            userId,
-            projectId,
-            prompt: `Evaluate student answer: "${userAnswerText}" for question: "${q.prompt}". Target Concept: ${q.concept_name}. Model Solution: ${q.correct_answer}.`
-          });
-          evaluation = res.data;
-          aiScore = Math.min(100, Math.max(0, evaluation.aiScore || 75));
-          isCorrect = aiScore >= 60;
-        } catch (e) {
-          aiScore = 75;
-          isCorrect = true;
+        const cleanAnswer = (userAnswerText || '').trim();
+        const isTrivialGreeting = /^(hlo|hello|hi|hey|test|yo|sup|none|na|nil|ok|k|good|bad|idk|i don'?t know)\.?$/i.test(cleanAnswer);
+
+        if (cleanAnswer.length < 15 || isTrivialGreeting) {
+          aiScore = 0;
+          isCorrect = false;
           evaluation = {
-            isCorrect: true,
-            aiScore: 75,
-            understanding: 'Demonstrates basic conceptual intuition.',
-            accuracy: 'Good alignment with domain principles.',
-            relevance: 'Directly addressed the prompt.',
-            keyConceptsCovered: [q.concept_name],
-            missingConcepts: ['Specific mathematical identity derivative'],
-            feedback: `Good explanation of ${q.concept_name}! Deepen your technical formulation with mathematical identities.`
+            isCorrect: false,
+            aiScore: 0,
+            understanding: 'No conceptual explanation provided. Response is too brief or off-topic.',
+            accuracy: '0% - Does not address the target concept or question.',
+            relevance: 'Irrelevant or minimal response.',
+            keyConceptsCovered: [],
+            missingConcepts: [q.concept_name],
+            feedback: `Your response ("${userAnswerText || 'empty'}") does not answer the question. Please provide a substantive explanation explaining how ${q.concept_name} operates.`
           };
+        } else {
+          try {
+            const res = await aiProvider.generateStructured({
+              feature: 'assessment_grading',
+              userId,
+              projectId,
+              studentAnswer: cleanAnswer,
+              questionPrompt: q.prompt,
+              conceptName: q.concept_name,
+              modelSolution: q.correct_answer,
+              prompt: `You are an academic assessment grading engine. Evaluate the student's answer strictly against the model solution.\nStudent Answer: "${cleanAnswer}"\nQuestion: "${q.prompt}"\nTarget Concept: ${q.concept_name}\nModel Solution: ${q.correct_answer}\nGrade on a scale of 0 to 100 based strictly on whether the student's answer correctly explains the core mechanism. Respond with valid JSON: { "isCorrect": boolean, "aiScore": number, "understanding": string, "accuracy": string, "relevance": string, "keyConceptsCovered": string[], "missingConcepts": string[], "feedback": string }`
+            });
+            evaluation = res.data;
+            aiScore = Math.min(100, Math.max(0, evaluation.aiScore ?? 0));
+            isCorrect = Boolean(evaluation.isCorrect && aiScore >= 60);
+          } catch (e) {
+            // Local rubric fallback on network/AI error
+            const ansLower = cleanAnswer.toLowerCase();
+            const hasMechanism = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('skip') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('flow') || ansLower.includes('shortcut');
+            aiScore = hasMechanism ? 80 : 20;
+            isCorrect = aiScore >= 60;
+            evaluation = {
+              isCorrect,
+              aiScore,
+              understanding: isCorrect ? 'Demonstrates basic conceptual intuition of the mechanism.' : 'Lacks core technical justification.',
+              accuracy: isCorrect ? 'Partially aligned with model principles.' : 'Does not cover the fundamental mechanism.',
+              relevance: 'Evaluated against question prompt.',
+              keyConceptsCovered: isCorrect ? [q.concept_name] : [],
+              missingConcepts: isCorrect ? ['Mathematical derivative formulation'] : [q.concept_name],
+              feedback: isCorrect
+                ? `Good explanation of ${q.concept_name}! Deepen your technical formulation with mathematical identities.`
+                : `Your response does not adequately explain ${q.concept_name}. Review the notes and describe the identity shortcut mechanism.`
+            };
+          }
         }
       }
 

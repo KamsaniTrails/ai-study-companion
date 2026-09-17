@@ -339,7 +339,7 @@ export const QuizView = ({ projectId }) => {
           </div>
 
           {/* Submission / Results Footer */}
-          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
             {result ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div>
