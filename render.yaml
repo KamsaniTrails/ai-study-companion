@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: ai-study-companion
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: AI_PROVIDER
+        value: local
+      - key: NODE_ENV
+        value: production
