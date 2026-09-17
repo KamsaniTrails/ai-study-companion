@@ -14,7 +14,8 @@ import {
   Layers,
   Pencil,
   Trash2,
-  Layout
+  Layout,
+  X
 } from 'lucide-react';
 
 export const Sidebar = ({
@@ -33,7 +34,9 @@ export const Sidebar = ({
   currentUser,
   onLogout,
   onCreateSpace,
-  onCreateProject
+  onCreateProject,
+  mobileMenuOpen,
+  onCloseMobile
 }) => {
   const isAdmin = currentUser?.role === 'admin';
 
@@ -55,30 +58,40 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="sidebar">
-      {/* Brand Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 4 }}>
-        <div style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
-          background: '#0f172a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#ffffff',
-          flexShrink: 0
-        }}>
-          <Brain size={18} />
+    <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+      {/* Brand Header & Mobile Close */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: '#0f172a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            flexShrink: 0
+          }}>
+            <Brain size={18} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
+              Study Companion
+            </h2>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+              AI Learning Workspace
+            </span>
+          </div>
         </div>
-        <div>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.2, margin: 0 }}>
-            Study Companion
-          </h2>
-          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-            AI Learning Workspace
-          </span>
-        </div>
+
+        <button
+          className="mobile-close-btn"
+          onClick={onCloseMobile}
+          aria-label="Close navigation"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Main Navigation */}

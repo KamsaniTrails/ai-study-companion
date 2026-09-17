@@ -13,9 +13,12 @@ import {
   EditProjectModal,
   ConfirmDeleteModal
 } from './components/CreateModal';
-import { Shield, Sparkles, Lock, CheckCircle2 } from 'lucide-react';
+import { Shield, Sparkles, Lock, CheckCircle2, Menu } from 'lucide-react';
 
 export const App = () => {
+  // Mobile Drawer State
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   // Authentication State
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
   const [currentUser, setCurrentUser] = useState(() => {
@@ -204,11 +207,28 @@ export const App = () => {
           setCreateProjectDefaultSpaceId(null);
           setIsProjectModalOpen(true);
         }}
+        mobileMenuOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+      />
+
+      {/* Mobile Drawer Backdrop */}
+      <div
+        className={`mobile-backdrop ${mobileMenuOpen ? 'active' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
       />
 
       <main className="main-content">
         <header className="topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle navigation menu"
+            >
+              <Menu size={18} />
+            </button>
+
             {/* Minimalist Live Status */}
             <div style={{
               display: 'inline-flex',
