@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Brain,
   Compass,
@@ -39,6 +39,7 @@ export const Sidebar = ({
   onCloseMobile
 }) => {
   const isAdmin = currentUser?.role === 'admin';
+  const touchStartX = useRef(null);
 
   const [expandedSpaceId, setExpandedSpaceId] = useState(() => {
     return selectedProject?.space_id || (spaces.length > 0 ? spaces[0].id : null);
@@ -57,8 +58,27 @@ export const Sidebar = ({
     setExpandedSpaceId((prev) => (prev === spaceId ? null : spaceId));
   };
 
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diffX = touchStartX.current - touchEndX;
+    // When swiped to the left by 40px or more, slide away / close!
+    if (diffX > 40) {
+      onCloseMobile?.();
+    }
+    touchStartX.current = null;
+  };
+
   return (
-    <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+    <aside
+      className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Brand Header & Mobile Close */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -97,7 +117,10 @@ export const Sidebar = ({
       {/* Main Navigation */}
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <button
-          onClick={() => setCurrentView('home')}
+          onClick={() => {
+            setCurrentView('home');
+            onCloseMobile?.();
+          }}
           className="btn"
           style={{
             justifyContent: 'flex-start',
@@ -116,7 +139,10 @@ export const Sidebar = ({
 
         {isAdmin && (
           <button
-            onClick={() => setCurrentView('admin')}
+            onClick={() => {
+              setCurrentView('admin');
+              onCloseMobile?.();
+            }}
             className="btn"
             style={{
               justifyContent: 'flex-start',
@@ -344,6 +370,7 @@ export const Sidebar = ({
                                 onClick={() => {
                                   onSelectProject(proj);
                                   setCurrentView('project');
+                                  onCloseMobile?.();
                                 }}
                                 style={{
                                   display: 'flex',

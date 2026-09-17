@@ -129,7 +129,9 @@ p {
 .app-container {
   display: flex;
   min-height: 100vh;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   background-color: var(--bg-app);
 }
 
@@ -530,7 +532,11 @@ p {
     flex-shrink: 0;
   }
 
-  /* Responsive Grid Adaptations */
+  /* Responsive Grid Adaptations: Force ALL multi-column grids to single column on mobile */
+  div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+
   .card-grid-2,
   .card-grid-3,
   .card-grid-4 {

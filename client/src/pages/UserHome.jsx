@@ -184,7 +184,8 @@ export const UserHome = ({
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
-            minWidth: 300
+            flex: '1 1 280px',
+            maxWidth: '100%'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 11, textTransform: 'uppercase', color: '#64748b', fontWeight: 700, letterSpacing: '0.04em' }}>

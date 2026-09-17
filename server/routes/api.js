@@ -77,9 +77,12 @@ apiRouter.post('/auth/send-otp', async (req, res) => {
 
   res.json({
     success: true,
-    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+    message: emailResult.sent
+      ? `A 6-digit verification code has been dispatched to ${normalizedEmail}.`
+      : `Email service is waiting for SMTP configuration on Render.`,
     email: normalizedEmail,
     emailSent: emailResult.sent,
+    dev_otp: emailResult.sent ? undefined : otp,
     smtpConfigured: emailResult.sent || emailResult.reason !== 'SMTP_NOT_CONFIGURED'
   });
 });
