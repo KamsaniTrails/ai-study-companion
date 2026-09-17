@@ -532,9 +532,11 @@ export const GrowthView = ({ projectId, onSelectTab }) => {
                   </div>
 
                   <div style={{ marginTop: 'auto', paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>Action: {rec.action}</span>
+                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                      Action: {rec.action || (rec.action_type === 'take_quiz' ? 'Practice Adaptive Drill' : 'Review Notes in AI Tutor')}
+                    </span>
                     <button
-                      onClick={() => onSelectTab && onSelectTab(rec.target_tab || 'tutor')}
+                      onClick={() => onSelectTab && onSelectTab(rec.target_tab || (rec.action_type === 'take_quiz' ? 'quiz' : 'tutor'))}
                       className="btn btn-secondary"
                       style={{ padding: '4px 10px', fontSize: 11 }}
                     >

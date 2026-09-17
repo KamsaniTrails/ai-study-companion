@@ -606,7 +606,7 @@ apiRouter.delete('/projects/:id', requireProjectAccess, (req, res) => {
   res.json({ success: true, message: 'Project and all related learning materials deleted successfully', projectId: id });
 });
 
-apiRouter.get('/projects/:id/dashboard', (req, res) => {
+apiRouter.get('/projects/:id/dashboard', async (req, res) => {
   const { id } = req.params;
   const project = db.findOne('projects', (p) => p.id === id);
   if (!project) return res.status(404).json({ error: 'Project not found' });
@@ -614,7 +614,11 @@ apiRouter.get('/projects/:id/dashboard', (req, res) => {
   const space = db.findOne('spaces', (s) => s.id === project.space_id);
   const masteries = db.find('concept_mastery', (m) => m.project_id === id);
   const recentEvents = db.find('learning_events', (e) => e.project_id === id).slice(-6);
-  const recommendations = db.find('recommendations', (r) => r.project_id === id && !r.is_dismissed);
+  let recommendations = db.find('recommendations', (r) => r.project_id === id && !r.is_dismissed);
+  if (recommendations.length === 0) {
+    await MasteryService.generateProjectRecommendations(id);
+    recommendations = db.find('recommendations', (r) => r.project_id === id && !r.is_dismissed);
+  }
   const materials = db.find('materials', (m) => m.project_id === id);
   const quizzes = db.find('quizzes', (q) => q.project_id === id && q.status === 'completed');
 
@@ -899,8 +903,12 @@ apiRouter.post('/projects/:projectId/mastery/update-evidence', async (req, res) 
   }
 });
 
-apiRouter.get('/projects/:projectId/recommendations', (req, res) => {
-  const recommendations = db.find('recommendations', (r) => r.project_id === req.params.projectId && !r.is_dismissed);
+apiRouter.get('/projects/:projectId/recommendations', async (req, res) => {
+  let recommendations = db.find('recommendations', (r) => r.project_id === req.params.projectId && !r.is_dismissed);
+  if (recommendations.length === 0) {
+    await MasteryService.generateProjectRecommendations(req.params.projectId);
+    recommendations = db.find('recommendations', (r) => r.project_id === req.params.projectId && !r.is_dismissed);
+  }
   res.json({ recommendations });
 });
 

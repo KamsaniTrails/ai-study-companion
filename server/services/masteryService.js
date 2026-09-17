@@ -113,10 +113,13 @@ class MasteryService {
     // Clear obsolete recommendations that are not dismissed
     db.remove('recommendations', (r) => r.project_id === projectId && !r.is_dismissed);
 
+    const firstChunk = db.findOne('document_chunks', (c) => c.project_id === projectId);
+    const defaultPage = firstChunk ? (firstChunk.page_number || 1) : 1;
+
     for (const item of masteries) {
       const hasRecentMistake = mistakes.some((m) => m.conceptName === item.concept_name);
       const matchingChunk = db.findOne('document_chunks', (c) => c.project_id === projectId && c.content.toLowerCase().includes(item.concept_name.toLowerCase()));
-      const targetPage = matchingChunk ? matchingChunk.page_number : 14;
+      const targetPage = matchingChunk ? (matchingChunk.page_number || defaultPage) : defaultPage;
 
       // PRD Exemplar Case 1: Improving, but application questions remain difficult
       if (item.status === 'improving' && (hasRecentMistake || item.mastery_score < 75)) {
@@ -125,8 +128,10 @@ class MasteryService {
           project_id: projectId,
           user_id: userId,
           title: `Reinforce Concept: ${item.concept_name}`,
+          action: `Review Notes on Page ${targetPage}`,
           description: `Your understanding of ${item.concept_name} has improved, but application-based questions remain difficult. Review the related material on Page ${targetPage} and complete another short assessment.`,
           action_type: 'review_material',
+          target_tab: 'tutor',
           priority: 'medium',
           concept_id: item.concept_id,
           concept_name: item.concept_name,
@@ -143,8 +148,10 @@ class MasteryService {
           project_id: projectId,
           user_id: userId,
           title: `Priority Mastery Alert: ${item.concept_name}`,
+          action: `Practice Adaptive Drill for ${item.concept_name}`,
           description: `${item.concept_name} currently requires attention (${item.mastery_score}% estimated mastery). Review core principles in your notes and practice with the AI Tutor.`,
           action_type: 'take_quiz',
+          target_tab: 'quiz',
           priority: 'high',
           concept_id: item.concept_id,
           concept_name: item.concept_name,
@@ -168,10 +175,12 @@ class MasteryService {
         project_id: projectId,
         user_id: userId,
         title: 'Complete Comprehensive Assessment Drill',
-        description: 'Your understanding across foundational concepts is stable. Review related material on Page 14 and complete another short assessment to maintain retention.',
+        action: 'Start Adaptive Drill',
+        description: `Your understanding across foundational concepts is stable. Review related material on Page ${defaultPage} and complete another short assessment to maintain retention.`,
         action_type: 'take_quiz',
+        target_tab: 'quiz',
         priority: 'medium',
-        target_page: 14,
+        target_page: defaultPage,
         reason: 'Periodic review schedule per spaced repetition forecast',
         is_dismissed: false,
         created_at: new Date().toISOString()

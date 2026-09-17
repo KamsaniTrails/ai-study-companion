@@ -66,8 +66,10 @@ export const ProjectDashboardView = ({ projectId, onSelectTab, currentUser }) =>
   const recommendations = data?.recommendations || [];
 
   const topRecommendation = recommendations[0] || {
+    title: 'Ask AI Tutor to clarify weak concepts',
     action: 'Ask AI Tutor to clarify weak concepts',
     target_tab: 'tutor',
+    description: 'Grounded dialogue with page citations reinforces conceptual gaps.',
     reason: 'Grounded dialogue with page citations reinforces conceptual gaps.'
   };
 
@@ -149,20 +151,20 @@ export const ProjectDashboardView = ({ projectId, onSelectTab, currentUser }) =>
           </div>
 
           <h2 style={{ fontSize: 18, fontWeight: 700, color: '#ffffff', margin: 0, letterSpacing: '-0.01em' }}>
-            {topRecommendation.action}
+            {topRecommendation.title || topRecommendation.action}
           </h2>
 
           <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5, margin: 0 }}>
-            {topRecommendation.reason}
+            {topRecommendation.description || topRecommendation.reason}
           </p>
         </div>
 
         <button
-          onClick={() => onSelectTab(topRecommendation.target_tab || 'tutor')}
+          onClick={() => onSelectTab(topRecommendation.target_tab || (topRecommendation.action_type === 'take_quiz' ? 'quiz' : 'tutor'))}
           className="btn btn-primary"
           style={{ padding: '9px 16px', fontSize: 13 }}
         >
-          <span>Continue Learning</span>
+          <span>{topRecommendation.action_type === 'take_quiz' ? 'Start Adaptive Drill' : 'Continue Learning'}</span>
           <ArrowRight size={14} />
         </button>
       </div>
