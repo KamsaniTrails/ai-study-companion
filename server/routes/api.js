@@ -20,6 +20,7 @@ const { FeynmanService } = require('../services/feynmanService');
 const { authenticateUser, requireProjectAccess, requireSpaceAccess } = require('../middleware/authMiddleware');
 const { apiRateLimiter } = require('../middleware/rateLimiter');
 const { cacheService } = require('../services/cacheService');
+const { emailService } = require('../services/emailService');
 
 const apiRouter = Router();
 
@@ -46,6 +47,131 @@ apiRouter.get('/auth/me', (req, res) => {
   const userId = role === 'admin' ? 'user_admin' : 'user_demo';
   const user = db.findOne('users', (u) => u.id === userId);
   res.json({ user });
+});
+
+// OTP-based Email Authentication
+apiRouter.post('/auth/send-otp', async (req, res) => {
+  const { email, name = 'Learner', role = 'student' } = req.body;
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'A valid email address is required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const otp = emailService.generateOtp(6);
+  emailService.saveOtp(normalizedEmail, otp);
+
+  // Dispatch real email via SMTP
+  const emailResult = await emailService.sendOtpEmail(normalizedEmail, otp, name);
+
+  try {
+    db.insert('security_logs', {
+      id: uuidv4(),
+      event_type: 'otp_dispatched',
+      user_id: 'anonymous',
+      severity: 'low',
+      payload: { email: normalizedEmail, emailSent: emailResult.sent, role, ip: req.ip },
+      action_taken: 'otp_generated',
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {}
+
+  res.json({
+    success: true,
+    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+    email: normalizedEmail,
+    emailSent: emailResult.sent,
+    smtpConfigured: emailResult.sent || emailResult.reason !== 'SMTP_NOT_CONFIGURED'
+  });
+});
+
+apiRouter.post('/auth/verify-otp', (req, res) => {
+  const { email, otp, name = 'Learner', role = 'student' } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ error: 'Email and verification code are required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const verification = emailService.verifyOtp(normalizedEmail, otp);
+
+  if (!verification.valid) {
+    try {
+      db.insert('security_logs', {
+        id: uuidv4(),
+        event_type: 'otp_verification_failed',
+        user_id: 'anonymous',
+        severity: 'medium',
+        payload: { email: normalizedEmail, error: verification.error, ip: req.ip },
+        action_taken: 'otp_rejected',
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {}
+    return res.status(400).json({ error: verification.error });
+  }
+
+  // Find or provision user
+  let user = db.findOne('users', (u) => u.email && u.email.toLowerCase() === normalizedEmail);
+
+  if (!user) {
+    const userId = 'user_' + Date.now();
+    user = db.insert('users', {
+      id: userId,
+      name: (name || normalizedEmail.split('@')[0]).trim(),
+      email: normalizedEmail,
+      role: role === 'admin' ? 'admin' : 'student',
+      goal: 'Master Core Learning Concepts',
+      created_at: new Date().toISOString()
+    });
+
+    const starterSpace = db.insert('spaces', {
+      id: 'space_' + Date.now(),
+      user_id: userId,
+      name: user.name.split(' ')[0] + "'s Workspace",
+      description: 'Personalized study workspace for ' + user.name,
+      icon: 'Sparkles',
+      color: '#6366f1',
+      created_at: new Date().toISOString()
+    });
+
+    const starterProject = db.insert('projects', {
+      id: 'project_' + Date.now(),
+      space_id: starterSpace.id,
+      user_id: userId,
+      name: 'Deep Learning & Neural Architectures',
+      description: 'Foundations, architectures, and practice modules',
+      learning_goal: 'Master core foundational concepts and practical implementation',
+      target_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    });
+
+    db.insert('persistent_context', {
+      id: uuidv4(),
+      project_id: starterProject.id,
+      user_id: userId,
+      learningGoals: [starterProject.learning_goal],
+      knownStrengths: ['Motivated Learner'],
+      knownWeaknesses: [],
+      repeatedMistakes: []
+    });
+  }
+
+  try {
+    db.insert('security_logs', {
+      id: uuidv4(),
+      event_type: 'login_success_otp',
+      user_id: user.id,
+      severity: 'low',
+      payload: { email: normalizedEmail, ip: req.ip },
+      action_taken: 'session_granted',
+      created_at: new Date().toISOString()
+    });
+  } catch (e) {}
+
+  res.json({
+    success: true,
+    user,
+    token: 'token_' + user.id,
+    message: 'Authentication successful'
+  });
 });
 
 // Cryptographic password hashing & verification (PRD Section 15 & Security Guide Section 2)

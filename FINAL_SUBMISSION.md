@@ -160,4 +160,9 @@ The application fully satisfies the **Security Architecture & Hardening Guide**:
 - **File Upload Security**: 25MB maximum size limits, prohibited executable extensions (`.exe`, `.bat`, `.sh`, `.py`, `.bin`), and randomized UUID/timestamp storage paths.
 - **API & Network Hardening**: Production security headers (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, CSP, Referrer-Policy) and token-bucket rate limiting (150 req/min with HTTP 429 and `Retry-After: 60`).
 - **Observability & Security Auditing**: Immutable `security_logs` audit trail recording blocked prompt injections, 403 unauthorized project access, 429 rate limit triggers, and login events with IP/UserAgent telemetry.
-- **Automated Verification**: **46 / 46 unit & security tests passing** with zero warnings or errors.
+- **Automated Verification**: **50 / 50 unit & security tests passing** with zero warnings or errors.
+
+
+## Production Deployment: https://ai-study-companion-1-flkl.onrender.com/
+
+

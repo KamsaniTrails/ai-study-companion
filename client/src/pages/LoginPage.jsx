@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Brain, CheckCircle2, KeyRound, Mail, RefreshCw, Shield, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Brain, CheckCircle2, KeyRound, Mail, RefreshCw, Shield, Sparkles, User, Loader2, AlertCircle } from 'lucide-react';
 
 export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
   const [step, setStep] = useState('input'); // 'input' | 'otp'
@@ -8,11 +8,19 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
   const [role, setRole] = useState('student');
   
   // OTP States
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
-  const [countdown, setCountdown] = useState(30);
-  const inputRefs = [useRef(null), useRef(null), useRef(null), useRef(null)];
+  const [infoMessage, setInfoMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [countdown, setCountdown] = useState(60);
+  const inputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null)
+  ];
 
   // Countdown timer for OTP resend
   useEffect(() => {
@@ -23,7 +31,7 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
     return () => clearInterval(timer);
   }, [step, countdown]);
 
-  const handleSendOtp = (e) => {
+  const handleSendOtp = async (e) => {
     e?.preventDefault();
     if (!name.trim()) {
       setError('Please enter your full name');
@@ -35,27 +43,54 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
     }
 
     setError('');
-    // Generate a random 4-digit OTP
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(code);
-    setOtpDigits(['', '', '', '']);
-    setCountdown(30);
-    setStep('otp');
+    setInfoMessage('');
+    setLoading(true);
 
-    // Auto focus first OTP input after render
-    setTimeout(() => {
-      inputRefs[0].current?.focus();
-    }, 150);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          name: name.trim(),
+          role
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch verification code');
+      }
+
+      setOtpDigits(['', '', '', '', '', '']);
+      setCountdown(60);
+      setStep('otp');
+
+      if (data.emailSent) {
+        setInfoMessage(`Verification code sent to ${data.email}. Please check your inbox and spam folder.`);
+      } else {
+        setInfoMessage(`Verification code generated for ${data.email}. Please check your email.`);
+      }
+
+      // Auto focus first OTP input
+      setTimeout(() => {
+        inputRefs[0].current?.focus();
+      }, 150);
+    } catch (err) {
+      setError(err.message || 'Error communicating with authentication server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOtpChange = (index, value) => {
     if (value.length > 1) {
-      // Handle paste of 4 digits
-      const pasted = value.replace(/\D/g, '').slice(0, 4);
-      if (pasted.length === 4) {
+      // Handle paste of 6 digits
+      const pasted = value.replace(/\D/g, '').slice(0, 6);
+      if (pasted.length === 6) {
         const newDigits = pasted.split('');
         setOtpDigits(newDigits);
-        inputRefs[3].current?.focus();
+        inputRefs[5].current?.focus();
         return;
       }
     }
@@ -67,7 +102,7 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
     setError('');
 
     // Auto focus next input
-    if (digit && index < 3) {
+    if (digit && index < 5) {
       inputRefs[index + 1].current?.focus();
     }
   };
@@ -78,47 +113,41 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
     }
   };
 
-  const handleVerifyOtp = (e) => {
+  const handleVerifyOtp = async (e) => {
     e?.preventDefault();
     const entered = otpDigits.join('');
-    if (entered.length < 4) {
-      setError('Please enter all 4 digits of the OTP code');
+    if (entered.length < 6) {
+      setError('Please enter all 6 digits of the verification code');
       return;
     }
 
-    if (entered !== generatedOtp) {
-      setError('Invalid OTP code. Please enter the code shown above.');
-      return;
-    }
-
-    // Success login
-    onLogin({
-      id: `user_${Date.now()}`,
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      role
-    });
-  };
-
-  const handleAutoFill = () => {
-    if (generatedOtp) {
-      setOtpDigits(generatedOtp.split(''));
-      setError('');
-    }
-  };
-
-  const fillQuickStudent = () => {
-    setName('Rajesh Reddy');
-    setEmail('rajesh.student@university.edu');
-    setRole('student');
     setError('');
-  };
+    setLoading(true);
 
-  const fillQuickAdmin = () => {
-    setName('Dr. Ramesh Kumar');
-    setEmail('ramesh.admin@university.edu');
-    setRole('admin');
-    setError('');
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          otp: entered,
+          name: name.trim(),
+          role
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid verification code');
+      }
+
+      // Successful verification
+      onLogin(data.user);
+    } catch (err) {
+      setError(err.message || 'Verification failed. Please check the code.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -127,39 +156,41 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)',
-      padding: '24px'
+      background: 'radial-gradient(ellipse at top, #eef2ff 0%, #f8fafc 70%)',
+      padding: '24px 16px'
     }}>
       <div style={{
         width: '100%',
-        maxWidth: '450px',
+        maxWidth: '460px',
         background: '#ffffff',
         border: '1px solid #e2e8f0',
         borderRadius: 24,
-        boxShadow: '0 20px 35px -5px rgba(0, 0, 0, 0.06), 0 10px 15px -5px rgba(0, 0, 0, 0.02)',
-        padding: '36px 32px',
+        boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02)',
+        padding: '40px 32px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 24
+        gap: 26
       }}>
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 52,
-            height: 52,
-            borderRadius: 14,
+            width: 56,
+            height: 56,
+            borderRadius: 16,
             background: 'linear-gradient(135deg, #4f46e5 0%, #0284c7 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            boxShadow: '0 8px 16px rgba(79, 70, 229, 0.25)'
+            boxShadow: '0 10px 20px -5px rgba(79, 70, 229, 0.35)'
           }}>
-            <Brain size={28} />
+            <Brain size={30} />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a' }}>AI Study Companion</h1>
-            <p style={{ fontSize: 13, color: '#64748b', marginTop: 3 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+              AI Study Companion
+            </h1>
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 4, margin: 0 }}>
               Secure Academic Workspace & AI Tutor
             </p>
           </div>
@@ -169,8 +200,11 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
         {step === 'input' && (
           <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Full Name</label>
-              <div style={{ position: 'relative', marginTop: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Full Name
+              </label>
+              <div style={{ position: 'relative', marginTop: 6, display: 'flex', alignItems: 'center' }}>
+                <User size={16} style={{ position: 'absolute', left: 14, color: '#94a3b8' }} />
                 <input
                   type="text"
                   required
@@ -178,32 +212,39 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="input-field"
+                  style={{ paddingLeft: 40 }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Email Address</label>
-              <div style={{ position: 'relative', marginTop: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Institutional Email
+              </label>
+              <div style={{ position: 'relative', marginTop: 6, display: 'flex', alignItems: 'center' }}>
+                <Mail size={16} style={{ position: 'absolute', left: 14, color: '#94a3b8' }} />
                 <input
                   type="email"
                   required
-                  placeholder="e.g., yourname@university.edu"
+                  placeholder="e.g., student@university.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field"
+                  style={{ paddingLeft: 40 }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Select Account Role</label>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Account Role
+              </label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                 <button
                   type="button"
                   onClick={() => setRole('student')}
                   style={{
-                    padding: '11px',
+                    padding: '12px',
                     borderRadius: 12,
                     border: role === 'student' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
                     background: role === 'student' ? '#eef2ff' : '#ffffff',
@@ -226,7 +267,7 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
                   type="button"
                   onClick={() => setRole('admin')}
                   style={{
-                    padding: '11px',
+                    padding: '12px',
                     borderRadius: 12,
                     border: role === 'admin' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
                     background: role === 'admin' ? '#eef2ff' : '#ffffff',
@@ -248,58 +289,52 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
             </div>
 
             {error && (
-              <div style={{ padding: '10px 14px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, color: '#e11d48', fontSize: 13, fontWeight: 500 }}>
-                {error}
+              <div style={{
+                padding: '10px 14px',
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: 10,
+                color: '#e11d48',
+                fontSize: 13,
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
               </div>
             )}
 
             <button
               type="submit"
+              disabled={loading}
               className="btn btn-primary"
-              style={{ width: '100%', padding: '13px', fontSize: 14, marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: 14,
+                marginTop: 6,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
             >
-              <KeyRound size={16} />
-              <span>Send OTP Verification Code</span>
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Sending Verification Code...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound size={16} />
+                  <span>Send OTP Verification Code</span>
+                </>
+              )}
             </button>
-
-            {/* Quick Fill Shortcuts for presentation */}
-            <div style={{ paddingTop: 8, borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', fontWeight: 600 }}>Quick Pre-fill (Optional)</span>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={fillQuickStudent}
-                  style={{
-                    padding: '6px 8px',
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    color: '#475569',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  Fill as Student
-                </button>
-                <button
-                  type="button"
-                  onClick={fillQuickAdmin}
-                  style={{
-                    padding: '6px 8px',
-                    background: '#f8fafc',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 8,
-                    fontSize: 11,
-                    color: '#475569',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  Fill as Admin
-                </button>
-              </div>
-            </div>
 
             {/* Switch to Sign Up */}
             <div style={{
@@ -307,13 +342,13 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
               fontSize: 13,
               color: '#64748b',
               borderTop: '1px solid #e2e8f0',
-              paddingTop: 12,
+              paddingTop: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6
             }}>
-              <span>New to AI Study Companion?</span>
+              <span>New to the platform?</span>
               <button
                 type="button"
                 onClick={onSwitchToSignup}
@@ -327,7 +362,7 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
                   textDecoration: 'underline'
                 }}
               >
-                Create an Account (Sign Up)
+                Register an Account
               </button>
             </div>
           </form>
@@ -338,7 +373,11 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
           <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <button
               type="button"
-              onClick={() => setStep('input')}
+              onClick={() => {
+                setStep('input');
+                setError('');
+                setInfoMessage('');
+              }}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -356,119 +395,155 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
               <span>Change details</span>
             </button>
 
-            {/* OTP Alert Notification Banner */}
+            {/* Notification Notice: Code sent to email */}
             <div style={{
-              padding: '14px 16px',
-              background: '#eef2ff',
-              border: '1px solid #c7d2fe',
+              padding: '16px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
               borderRadius: 14,
               display: 'flex',
-              flexDirection: 'column',
-              gap: 8
+              gap: 12,
+              alignItems: 'flex-start'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 700 }}>
-                  SECURE OTP DISPATCHED
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: '#dcfce7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: '#16a34a'
+              }}>
+                <Mail size={18} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 13, color: '#166534', fontWeight: 700 }}>
+                  Verification Code Dispatched
                 </span>
-                <button
-                  type="button"
-                  onClick={handleAutoFill}
-                  style={{
-                    padding: '3px 8px',
-                    background: '#4f46e5',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Auto-fill
-                </button>
+                <span style={{ fontSize: 13, color: '#334155', lineHeight: 1.4 }}>
+                  A 6-digit security code was sent to <strong>{email}</strong>. Please check your inbox (and spam/junk folder).
+                </span>
               </div>
-              <div style={{ fontSize: 13, color: '#1e293b' }}>
-                Your verification code is: <strong style={{ fontSize: 18, color: '#4f46e5', letterSpacing: '0.15em', marginLeft: 6 }}>{generatedOtp}</strong>
-              </div>
-              <span style={{ fontSize: 11, color: '#64748b' }}>
-                Sent to: <strong>{email}</strong> ({role})
-              </span>
             </div>
 
-            {/* 4 Digit Boxes */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
-              {otpDigits.map((digit, idx) => (
-                <input
-                  key={idx}
-                  ref={inputRefs[idx]}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleOtpChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(idx, e)}
-                  style={{
-                    width: 54,
-                    height: 58,
-                    textAlign: 'center',
-                    fontSize: 24,
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    borderRadius: 14,
-                    border: digit ? '2px solid #4f46e5' : '1px solid #cbd5e1',
-                    background: digit ? '#eef2ff' : '#ffffff',
-                    outline: 'none',
-                    boxShadow: digit ? '0 0 0 3px rgba(79, 70, 229, 0.15)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                />
-              ))}
+            {/* 6 Digit Input Boxes */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', textAlign: 'center', marginBottom: 10 }}>
+                Enter 6-Digit Code
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                {otpDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={inputRefs[idx]}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(idx, e)}
+                    style={{
+                      width: 48,
+                      height: 54,
+                      textAlign: 'center',
+                      fontSize: 22,
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      borderRadius: 12,
+                      border: digit ? '2px solid #4f46e5' : '1px solid #cbd5e1',
+                      background: digit ? '#eef2ff' : '#ffffff',
+                      outline: 'none',
+                      boxShadow: digit ? '0 0 0 3px rgba(79, 70, 229, 0.15)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  />
+                ))}
+              </div>
             </div>
 
             {error && (
-              <div style={{ padding: '10px 14px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 10, color: '#e11d48', fontSize: 13, fontWeight: 500, textAlign: 'center' }}>
-                {error}
+              <div style={{
+                padding: '10px 14px',
+                background: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: 10,
+                color: '#e11d48',
+                fontSize: 13,
+                fontWeight: 500,
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{error}</span>
               </div>
             )}
 
             <button
               type="submit"
+              disabled={loading}
               className="btn btn-primary"
-              style={{ width: '100%', padding: '13px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
             >
-              <CheckCircle2 size={16} />
-              <span>Verify OTP & Enter Workspace</span>
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Verifying Code...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} />
+                  <span>Verify Code & Enter Workspace</span>
+                </>
+              )}
             </button>
 
-            {/* Resend */}
-            <div style={{ textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+            {/* Resend Timer */}
+            <div style={{ textAlign: 'center', fontSize: 13, color: '#64748b' }}>
               {countdown > 0 ? (
-                <span>Resend OTP code in <strong>00:{countdown < 10 ? `0${countdown}` : countdown}</strong></span>
+                <span>
+                  Resend code in <strong style={{ color: '#0f172a' }}>00:{countdown < 10 ? `0${countdown}` : countdown}</strong>
+                </span>
               ) : (
                 <button
                   type="button"
                   onClick={handleSendOtp}
+                  disabled={loading}
                   style={{
                     background: 'none',
                     border: 'none',
                     color: '#4f46e5',
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4
+                    gap: 6
                   }}
                 >
-                  <RefreshCw size={13} />
-                  <span>Resend OTP Code</span>
+                  <RefreshCw size={14} />
+                  <span>Resend Verification Code</span>
                 </button>
               )}
             </div>
           </form>
         )}
 
-        {/* Trust Footer */}
+        {/* Security Trust Footer */}
         <div style={{
           textAlign: 'center',
           fontSize: 12,
@@ -478,10 +553,10 @@ export const LoginPage = ({ onLogin, onSwitchToSignup }) => {
           justifyContent: 'center',
           gap: 6,
           borderTop: '1px solid #e2e8f0',
-          paddingTop: 14
+          paddingTop: 16
         }}>
-          <CheckCircle2 size={14} color="#059669" />
-          <span>Role-Based Secure Academic Access Control</span>
+          <Shield size={14} color="#4f46e5" />
+          <span>Email Verification & Role-Based Access Control</span>
         </div>
       </div>
     </div>

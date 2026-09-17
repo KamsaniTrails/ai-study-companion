@@ -301,6 +301,21 @@ async function run() {
   const unauthorizedTool = SecurityGuard.authorizeToolExecution('user_demo', 'drop_all_tables', {});
   assert(unauthorizedTool.authorized === false, 'Unauthorized arbitrary capability execution rejected');
 
+  console.log('\n[11. Email OTP Authentication Verification]');
+  const { emailService } = require('./services/emailService');
+  const testOtp = emailService.generateOtp(6);
+  assert(testOtp.length === 6 && /^\d{6}$/.test(testOtp), 'Secure 6-digit numeric OTP generated');
+
+  emailService.saveOtp('student@university.edu', testOtp);
+  const badAttempt = emailService.verifyOtp('student@university.edu', '000000');
+  assert(badAttempt.valid === false && badAttempt.error.includes('Incorrect verification code'), 'Incorrect OTP code rejected with attempt decrement');
+
+  const goodAttempt = emailService.verifyOtp('student@university.edu', testOtp);
+  assert(goodAttempt.valid === true, 'Valid OTP code verified and consumed successfully');
+
+  const replayAttempt = emailService.verifyOtp('student@university.edu', testOtp);
+  assert(replayAttempt.valid === false, 'Consumed OTP code cannot be replayed (single-use enforcement)');
+
   console.log('\n=======================================================');
   console.log(` SUMMARY: ${passed} / ${total} TESTS PASSED`);
   console.log('=======================================================\n');
