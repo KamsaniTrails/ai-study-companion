@@ -2,9 +2,11 @@
 
 An enterprise-grade, evidence-grounded AI learning platform built according to rigorous AI engineering and observability standards.
 
-## 📑 Documentation Index\n- [The AI Learning Partner — Vision & Manifesto](PARTNER_VISION.md)\n- [Final Submission Requirements Package](FINAL_SUBMISSION.md)\n- [System Architecture & Decisions](ARCHITECTURE.md)\n- [Engineering Decisions & Technical Trade-offs](ENGINEERING_DECISIONS.md)\n- [Development Prompts Log](PROMPTS.md)\n\n## 🚀 Live Services
-- **Frontend Web Application**: `http://localhost:3000`
-- **Backend API & Health**: `http://localhost:4000/health`
+## 📑 Documentation Index\n- [The AI Learning Partner — Vision & Manifesto](PARTNER_VISION.md)\n- [Final Submission Requirements Package](FINAL_SUBMISSION.md)\n- [System Architecture & Decisions](ARCHITECTURE.md)\n- [Engineering Decisions & Technical Trade-offs](ENGINEERING_DECISIONS.md)\n- [Development Prompts Log](PROMPTS.md)\n\n## 🚀 Live Cloud Deployment & Services
+- **Live Production URL**: [https://ai-study-companion-1-flkl.onrender.com](https://ai-study-companion-1-flkl.onrender.com)
+- **Live Health Endpoint**: [https://ai-study-companion-1-flkl.onrender.com/health](https://ai-study-companion-1-flkl.onrender.com/health)
+- **Local Dev Server**: `http://localhost:3000`
+- **Local Backend API**: `http://localhost:4000`
 - **Database Schema**: `server/data/db.json` (Readable, atomic JSON with automated backup recovery)
 
 ---
