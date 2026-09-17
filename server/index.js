@@ -40,7 +40,7 @@ app.get('/health', (_req, res) => {
 const clientDistPath = path.resolve(__dirname, '../client/dist');
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
-  app.get('*', (req, res, next) => {
+  app.use((req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') {
       return next();
     }
@@ -54,10 +54,10 @@ function start() {
   DocumentProcessor.init();
   WorkflowEngine.init();
 
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log('====================================================');
-    console.log(`Backend Server running on: http://localhost:${PORT}`);
-    console.log(`Health Check:              http://localhost:${PORT}/health`);
+    console.log(`Backend Server running on: http://0.0.0.0:${PORT}`);
+    console.log(`Health Check:              http://0.0.0.0:${PORT}/health`);
     console.log(`Database format:           Readable JSON (server/data/db.json)`);
     console.log('====================================================');
   });
