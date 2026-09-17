@@ -200,7 +200,7 @@ export const TutorView = ({ projectId, currentUser }) => {
   };
 
   return (
-    <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, height: 'calc(100vh - 160px)', minHeight: 600 }}>
+    <div className="animate-fade-in tutor-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, height: 'calc(100vh - 160px)', minHeight: 600 }}>
       {/* Left Pane: Tutor Chat Stream */}
       <div className="card-pro" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Chat Stream Header */}

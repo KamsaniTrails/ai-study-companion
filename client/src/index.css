@@ -548,6 +548,19 @@ p {
     display: none !important;
   }
 
+  /* Tutor Layout Stacking for mobile */
+  .tutor-layout {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+  .tutor-layout > div:first-child {
+    height: 520px !important;
+  }
+  .tutor-layout > div:last-child {
+    height: 380px !important;
+  }
+
   /* Touch Target Ergonomics */
   .btn {
     min-height: 38px;
