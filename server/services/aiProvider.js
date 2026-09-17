@@ -161,7 +161,12 @@ class AiProviderService {
 
     // 0. Pre-Quiz Revision Guidance Mode (PRD Item 93)
     if (options.feature === 'revision' || options.systemPrompt?.includes('PRE-QUIZ REVISION GUIDANCE MODE')) {
-      return `### 🎯 Pre-Quiz Rapid Revision Recap
+      const isTransformer = options.projectId === 'project_transformers' ||
+        options.prompt?.toLowerCase().includes('residual') ||
+        options.prompt?.toLowerCase().includes('attention');
+
+      if (isTransformer) {
+        return `### 🎯 Pre-Quiz Rapid Revision Recap
 
 Here is your high-yield, exam-focused revision grounded in your materials:
 
@@ -178,6 +183,29 @@ Here is your high-yield, exam-focused revision grounded in your materials:
 ---
 **⚡ Quick Check:**
 *Why does adding the identity term (+1) mathematically ensure that gradients do not degrade through deep backpropagation?*`;
+      }
+
+      const projectId = options.projectId;
+      const chunks = projectId ? db.find('document_chunks', (c) => c.project_id === projectId) : [];
+      const materials = projectId ? db.find('materials', (m) => m.project_id === projectId) : [];
+      const concepts = projectId ? db.find('concepts', (c) => c.project_id === projectId) : [];
+      const docName = materials[0]?.original_name?.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ') || 'Course Notes';
+
+      const keyPoints = chunks.slice(0, 3).map((c, idx) => `* **Key Mechanism ${idx + 1}:** ${c.content.slice(0, 200)}...`).join('\n\n');
+
+      return `### 🎯 Pre-Quiz Rapid Revision Recap: ${docName}
+
+Here is your high-yield, exam-focused revision grounded in your materials:
+
+* **Core Intuition & Mechanisms:**
+${keyPoints || `Review the core definitions and operational flows established in ${docName}.`}
+
+* **Target Concepts to Focus On:**
+${concepts.slice(0, 3).map((c) => `- **${c.name}:** ${c.description || 'Core principle'}`).join('\n') || '- Foundations and operational mechanisms.'}
+
+---
+**⚡ Quick Check:**
+*How does the platform coordinate its core mechanisms to achieve reliable end-to-end processing?*`;
     }
 
     // 1. Assessment Rubric Grading
@@ -205,56 +233,120 @@ Here is your high-yield, exam-focused revision grounded in your materials:
         });
       }
 
-      // Evaluate student's answer text specifically (NOT the prompt text)
-      const hasKeywords = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('shortcut') || ansLower.includes('flow') || ansLower.includes('skip') || ansLower.includes('vanish') || ansLower.includes('+ 1') || ansLower.includes('+1');
-      const hasMath = ansLower.includes('dh/dx') || ansLower.includes('df/dx') || ansLower.includes('+ 1') || ansLower.includes('+1') || ansLower.includes('identity');
+      // Check if question is transformer/residual related
+      let modelSol = options.modelSolution || '';
+      if (!modelSol) {
+        const m = options.prompt.match(/Model Solution:\s*([^\n]+)/i);
+        if (m) modelSol = m[1];
+      }
+      let concept = options.conceptName || '';
+      if (!concept) {
+        const c = options.prompt.match(/Target Concept:\s*([^\n]+)/i) || options.prompt.match(/Concept:\s*([^\n]+)/i);
+        if (c) concept = c[1];
+      }
+
+      const isTransformer = (concept && /residual|attention|transformer|gradient|backprop/i.test(concept)) ||
+        options.prompt.includes('Residual Connections') ||
+        (modelSol && /gradient|derivative|skip connection|dH\/dx/i.test(modelSol));
 
       let score = 10;
-      if (hasKeywords && hasMath) score = 92;
-      else if (hasKeywords) score = 80;
-      else if (ansTrimmed.length > 50 && (ansLower.includes('layer') || ansLower.includes('network') || ansLower.includes('connection'))) score = 35;
-      else score = 10;
+      let isCorrect = false;
 
-      const isCorrect = score >= 60;
+      if (isTransformer) {
+        const hasKeywords = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('shortcut') || ansLower.includes('flow') || ansLower.includes('skip') || ansLower.includes('vanish') || ansLower.includes('+ 1') || ansLower.includes('+1');
+        const hasMath = ansLower.includes('dh/dx') || ansLower.includes('df/dx') || ansLower.includes('+ 1') || ansLower.includes('+1') || ansLower.includes('identity');
+
+        if (hasKeywords && hasMath) score = 92;
+        else if (hasKeywords) score = 80;
+        else if (ansTrimmed.length > 50 && (ansLower.includes('layer') || ansLower.includes('network') || ansLower.includes('connection'))) score = 35;
+        else score = 10;
+        isCorrect = score >= 60;
+      } else {
+        const stopwords = new Set(['this', 'that', 'with', 'from', 'have', 'were', 'been', 'their', 'which', 'about', 'there', 'would', 'could', 'should', 'these', 'those', 'where', 'after', 'before', 'under', 'through', 'during', 'between', 'into', 'each', 'also', 'such', 'more', 'most', 'other', 'some', 'only', 'than', 'when', 'what', 'then']);
+        const keyTokens = (modelSol + ' ' + concept)
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter((t) => t.length >= 4 && !stopwords.has(t));
+        const uniqueTokens = Array.from(new Set(keyTokens));
+        const matched = uniqueTokens.filter((token) => ansLower.includes(token));
+        const ratio = uniqueTokens.length > 0 ? (matched.length / uniqueTokens.length) : 0;
+
+        const hasExplanationStructure = ansLower.includes('because') || ansLower.includes('connect') || ansLower.includes('enables') || ansLower.includes('routes') || ansLower.includes('uses') || ansLower.includes('through') || ansLower.includes('operates') || ansLower.includes('settles') || ansLower.includes('provides') || ansLower.includes('system');
+
+        if (ratio >= 0.3 || matched.length >= 3) {
+          score = Math.min(95, 78 + Math.round(ratio * 20));
+          isCorrect = true;
+        } else if (ratio >= 0.15 || matched.length >= 2) {
+          score = hasExplanationStructure ? 70 : 60;
+          isCorrect = true;
+        } else if (matched.length >= 1) {
+          score = 35;
+          isCorrect = false;
+        } else {
+          score = 10;
+          isCorrect = false;
+        }
+      }
+
       return JSON.stringify({
         isCorrect,
         aiScore: score,
-        understanding: score >= 80 ? 'Demonstrates thorough comprehension of gradient mechanics and structural bypass.' : 'Shows minimal intuition, missing key technical principles.',
-        accuracy: score >= 80 ? 'Accurate statement of identity bypass.' : 'Inaccurate or missing mechanism description (Score: 10%).',
+        understanding: score >= 80 ? `Demonstrates thorough comprehension of ${concept || 'the target concept'}.` : `Shows partial or minimal intuition of ${concept || 'the target concept'}.`,
+        accuracy: score >= 80 ? 'Accurate alignment with verified course materials.' : `Inaccurate or missing mechanism description (Score: ${score}%).`,
         relevance: score >= 60 ? 'Directly addresses the question prompt.' : 'Answer does not demonstrate mastery of core concept.',
-        keyConceptsCovered: score >= 60 ? ['Residual bypass', 'Gradient flow'] : [],
-        missingConcepts: score < 80 ? ['Explicit mathematical derivative dH/dx = dF/dx + 1'] : [],
+        keyConceptsCovered: score >= 60 ? [concept || 'Core mechanism'] : [],
+        missingConcepts: score < 80 ? [`Detailed explanation of ${concept || 'operational flow'}`] : [],
         feedback: score >= 80
-          ? 'Great job! You clearly stated how identity paths prevent gradient degradation.'
-          : 'To achieve mastery, explain that the identity derivative (+1) ensures gradient flow cannot degrade to zero during backpropagation.'
+          ? `Great job! You clearly stated how ${concept || 'the mechanism'} functions.`
+          : `To achieve mastery, explain how ${concept || 'the core mechanism'} operates based on your course materials.`
       });
     }
 
     // 2. Adaptive Quiz Generation
     if (options.feature === 'quiz_generation') {
-      return JSON.stringify([
-        {
-          type: 'mcq',
-          prompt: 'Why do transformer models divide query-key dot products by sqrt(d_k)?',
-          options: [
-            'To compress vector representations into fewer dimensions',
-            'To prevent variance inflation from pushing softmax into regions with vanishing gradients',
-            'To make the resulting attention matrix diagonally dominant',
-            'To accelerate forward inference using integer arithmetic'
-          ],
-          correctAnswer: 'To prevent variance inflation from pushing softmax into regions with vanishing gradients',
-          explanation: 'For large d_k, dot products grow large in magnitude, saturating softmax into near-zero gradients. Scaling normalizes variance to 1.',
-          difficulty: 'intermediate'
-        },
-        {
-          type: 'open_ended',
-          prompt: 'Explain how residual skip connections H(x) = F(x) + x facilitate gradient flow through hundreds of layers during backpropagation.',
-          options: null,
-          correctAnswer: 'During backpropagation, the gradient is dH/dx = dF/dx + 1. The constant +1 identity term ensures gradients flow directly through the skip connection without being repeatedly multiplied by sub-unity weight matrices.',
-          explanation: 'The additive identity term +1 prevents vanishing gradients across deep layers.',
-          difficulty: 'intermediate'
-        }
-      ]);
+      const projectId = options.projectId;
+      const isTransformer = projectId === 'project_transformers' ||
+        options.prompt?.toLowerCase().includes('scaled dot-product') ||
+        options.prompt?.toLowerCase().includes('residual skip');
+
+      if (isTransformer) {
+        return JSON.stringify([
+          {
+            type: 'mcq',
+            prompt: 'Why do transformer models divide query-key dot products by sqrt(d_k)?',
+            options: [
+              'To compress vector representations into fewer dimensions',
+              'To prevent variance inflation from pushing softmax into regions with vanishing gradients',
+              'To make the resulting attention matrix diagonally dominant',
+              'To accelerate forward inference using integer arithmetic'
+            ],
+            correctAnswer: 'To prevent variance inflation from pushing softmax into regions with vanishing gradients',
+            explanation: 'For large d_k, dot products grow large in magnitude, saturating softmax into near-zero gradients. Scaling normalizes variance to 1.',
+            difficulty: options.difficulty || 'intermediate',
+            conceptName: 'Scaled Dot-Product Attention'
+          },
+          {
+            type: 'open_ended',
+            prompt: 'Explain how residual skip connections H(x) = F(x) + x facilitate gradient flow through hundreds of layers during backpropagation.',
+            options: null,
+            correctAnswer: 'During backpropagation, the gradient is dH/dx = dF/dx + 1. The constant +1 identity term ensures gradients flow directly through the skip connection without being repeatedly multiplied by sub-unity weight matrices.',
+            explanation: 'The additive identity term +1 prevents vanishing gradients across deep layers.',
+            difficulty: options.difficulty || 'intermediate',
+            conceptName: 'Residual Connections'
+          }
+        ]);
+      }
+
+      // Dynamic document-grounded generation for user-uploaded project materials
+      const chunks = options.chunks || (projectId ? db.find('document_chunks', (c) => c.project_id === projectId) : []);
+      const materials = projectId ? db.find('materials', (m) => m.project_id === projectId) : [];
+      const targetConcepts = options.targetConcepts || (projectId ? db.find('concept_mastery', (m) => m.project_id === projectId) : []);
+      const difficulty = options.difficulty || 'intermediate';
+
+      const { QuizEngine } = require('./quizEngine');
+      const questions = QuizEngine.synthesizeDocumentQuestions(projectId, targetConcepts, chunks, materials, difficulty);
+      return JSON.stringify(questions);
     }
 
     // 3. Unsupported question handling (PRD Sec 7)
@@ -281,34 +373,73 @@ According to our evidence-grounded principles, I only provide answers verified b
       const knowledgeMatch = options.prompt.match(/=== 2\. GROUNDED PROJECT KNOWLEDGE ===\s*([\s\S]*?)(?=\n=== 3\.|\n\n=== RECENT|$)/);
       const knowledgeText = knowledgeMatch ? knowledgeMatch[1].trim() : '';
 
+      const userQueryMatch = options.prompt.match(/=== 3\. CURRENT LEARNER REQUEST ===\s*([\s\S]*?)$/) ||
+                             options.prompt.match(/User Question:\s*"([^"]+)"/);
+      const userQuery = userQueryMatch ? userQueryMatch[1].trim() : '';
+      const userQueryLower = userQuery.toLowerCase();
+
       if (knowledgeText && knowledgeText.length > 20) {
+        // Find document name and page number from knowledge header
         const sourceMatch = knowledgeText.match(/\[Source:\s*([^\—\]]+)\s*—\s*Page\s*(\d+)\]/);
         const docName = sourceMatch ? sourceMatch[1].trim() : 'Project Notes';
         const pageNum = sourceMatch ? sourceMatch[2].trim() : '1';
 
-        // Extract cleaned paragraphs from knowledge chunks
-        const cleanedLines = knowledgeText
-          .split('\n')
-          .map((l) => l.trim())
-          .filter((l) => l.length > 20 && !l.startsWith('[Source:'));
+        // Check if query is explicitly asking for a page
+        const isPageQuery = /\b(?:page|pg|p\.?)\s*\d+\b/i.test(userQueryLower) || /^\d+\s*(?:page|pg)?$/i.test(userQueryLower);
 
-        const excerpts = cleanedLines.slice(0, 3);
+        // Split knowledge text into meaningful lines/paragraphs
+        const rawBlocks = knowledgeText
+          .split(/(?=\[Source:)/)
+          .map((b) => b.trim())
+          .filter((b) => b.length > 0);
+
+        const paragraphs = [];
+        for (const block of rawBlocks) {
+          const lines = block
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.length > 20 && !l.startsWith('[Source:'));
+          paragraphs.push(...lines);
+        }
+
+        if (isPageQuery) {
+          const pageItems = paragraphs.slice(0, 4);
+          return `### 📄 Summary & Explanations for **${docName}** (Page ${pageNum})\n\n` +
+            `Here is a complete breakdown of the material covered on **Page ${pageNum}**:\n\n` +
+            pageItems.map((p, idx) => `* **Key Point ${idx + 1}:** ${p}`).join('\n\n') +
+            `\n\n💡 *Tip:* Ask me any specific follow-up question or click the **Page ${pageNum} Jump ↗** citation button to view the original PDF document inline.`;
+        }
+
+        // For topic / concept queries: Rank paragraphs by overlap with user question terms
+        const queryTerms = userQueryLower.replace(/[^\w\s]/g, '').split(/\s+/).filter((w) => w.length > 2);
+        const scoredParas = paragraphs.map((p) => {
+          const pLower = p.toLowerCase();
+          let score = 0;
+          for (const term of queryTerms) {
+            if (pLower.includes(term)) score += 2;
+          }
+          return { text: p, score };
+        });
+
+        scoredParas.sort((a, b) => b.score - a.score);
+        const bestParas = scoredParas.slice(0, 3).map((s) => s.text);
+        const selected = bestParas.length > 0 ? bestParas : paragraphs.slice(0, 3);
 
         return `Based on your course materials in **${docName}** (Page ${pageNum}):\n\n` +
-          excerpts.map((line, idx) => `**${idx + 1}. Key Insight:** ${line}`).join('\n\n') +
-          `\n\n**Application & Recommendation:** Review these notes in your Project Workspace to solidify these foundational mechanisms before your next adaptive practice drill.`;
+          selected.map((line, idx) => `* **${idx + 1}.** ${line}`).join('\n\n') +
+          `\n\n**Key Takeaway:** These mechanisms are directly referenced in your course materials. Let me know if you would like me to clarify any technical terms, calculate formulas, or generate practice questions!`;
       }
     }
 
     // Default grounded tutor response
     return `Based on your course materials for this Project:
 
-The fundamental mechanism balances representation capacity with gradient propagation stability. Specifically, when computing operations across deep layers, gradients can diminish exponentially unless explicit bypass or scaling pathways are introduced.
+The fundamental mechanism balances representation capacity with operational stability. Specifically, when computing operations across deep layers, gradients can diminish exponentially unless explicit bypass or scaling pathways are introduced.
 
 Key points from your materials:
-1. **Mathematical Stability:** Dimension scaling normalizes variance back to unity, avoiding saturation in exponential functions.
-2. **Gradient Flow:** Additive skip connections ensure an uninterrupted backward path with an identity gradient component.
-3. **Application:** These concepts are foundational for building scalable architectures without gradient collapse.`;
+1. **Structural Stability:** Dimension scaling normalizes variance back to unity, avoiding saturation in exponential functions.
+2. **Operational Flow:** Additive bypass pathways ensure uninterrupted processing with verified evidence.
+3. **Application:** These concepts are foundational for building scalable architectures without degradation.`;
   }
 }
 
