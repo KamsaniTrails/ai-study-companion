@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
 const db = require('./db');
+const { FaissVectorStore } = require('./services/faissVectorStore');
 const { DocumentProcessor } = require('./services/documentProcessor');
 const { WorkflowEngine } = require('./services/workflowEngine');
 const { apiRouter } = require('./routes/api');
@@ -51,6 +52,7 @@ if (fs.existsSync(clientDistPath)) {
 function start() {
   console.log('🚀 Booting AI Study Companion Backend (Pure JavaScript)...');
   db.init();
+  FaissVectorStore.init();
   DocumentProcessor.init();
   WorkflowEngine.init();
 

@@ -1,5 +1,6 @@
 const db = require('./db');
 const { RetrievalEngine } = require('./services/retrievalEngine');
+const { FaissVectorStore } = require('./services/faissVectorStore');
 const { aiProvider } = require('./services/aiProvider');
 const { MasteryService } = require('./services/masteryService');
 const { backgroundQueue } = require('./services/backgroundQueue');
@@ -24,6 +25,7 @@ async function run() {
   console.log('=======================================================\n');
 
   db.init();
+  FaissVectorStore.init();
 
   // 1. Project Isolation
   console.log('[1. Security & Project-Level Isolation]');
@@ -338,6 +340,26 @@ async function run() {
   assert(overviewSearch.hasSufficientEvidence === true, 'Document overview query produces sufficient evidence');
   assert(overviewSearch.topChunks.length > 0, 'Document overview query returns grounded top chunks');
   assert(overviewSearch.citations.length > 0, 'Document overview query returns valid citations');
+
+  console.log('\n[13. FAISS Vector Store & Resilient Student Query Retrieval]');
+  const faissStats = FaissVectorStore.getStats();
+  assert(faissStats.totalVectorsIndexed > 0, 'FAISS indexed document chunk vectors successfully');
+  assert(Boolean(faissStats.engine), 'FAISS vector engine active');
+
+  // Typo resilience test (summaru -> summary)
+  const typoQuery = RetrievalEngine.search('project_transformers', 'explain document summaru', 3);
+  assert(typoQuery.hasSufficientEvidence === true, 'Typo query "explain document summaru" produces sufficient evidence');
+  assert(typoQuery.topChunks.length > 0, 'Typo query returns matching chunks');
+
+  // Conversational regional intent test (Telugu / Tanglish)
+  const teluguQuery = RetrievalEngine.search('project_transformers', 'notes lo emundi cheppu', 3);
+  assert(teluguQuery.hasSufficientEvidence === true, 'Telugu conversational query produces sufficient evidence');
+  assert(teluguQuery.citations.length > 0, 'Telugu conversational query returns verified citations');
+
+  // Empty project test
+  const emptyQuery = RetrievalEngine.search('project_1789524205531', 'explain document', 3);
+  assert(emptyQuery.hasSufficientEvidence === false, 'Project with 0 documents flagged with insufficient evidence');
+  assert(emptyQuery.reason === 'NO_DOCUMENTS', 'Identifies exact reason as NO_DOCUMENTS');
 
   console.log('\n=======================================================');
   console.log(` SUMMARY: ${passed} / ${total} TESTS PASSED`);

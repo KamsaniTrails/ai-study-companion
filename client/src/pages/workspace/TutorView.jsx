@@ -600,7 +600,7 @@ export const TutorView = ({ projectId, currentUser }) => {
                     Page {activeCitation.pageNumber}
                   </span>
                   <span style={{ fontSize: 11, color: '#64748b' }}>
-                    Relevance: {activeCitation.relevanceScore || 94}%
+                    Relevance: {activeCitation.relevanceScore != null ? Math.round(activeCitation.relevanceScore > 1 ? activeCitation.relevanceScore : activeCitation.relevanceScore * 100) : 0}%
                   </span>
                 </div>
 

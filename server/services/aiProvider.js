@@ -190,18 +190,18 @@ Here is your high-yield, exam-focused revision grounded in your materials:
       }
       const ansTrimmed = studentAns.trim();
       const ansLower = ansTrimmed.toLowerCase();
-      const isGreetingOrTrivial = /^(hlo|hello|hi|hey|test|yo|none|na|nil|ok|good|bad)\.?$/i.test(ansTrimmed);
+      const isGreetingOrTrivial = /^(hlo|hello|hi|hey|test|yo|none|na|nil|ok|good|bad|idk|i don'?t know|no idea|pass|bye)(\s.*)?$/i.test(ansTrimmed);
 
       if (ansTrimmed.length < 15 || isGreetingOrTrivial) {
         return JSON.stringify({
           isCorrect: false,
           aiScore: 0,
-          understanding: 'No conceptual explanation provided. Response is too brief or off-topic.',
+          understanding: 'No conceptual explanation provided. Response is a greeting or too brief to evaluate.',
           accuracy: '0% - Does not address the target concept or question.',
           relevance: 'Irrelevant or minimal response.',
           keyConceptsCovered: [],
           missingConcepts: ['Core architectural mechanism'],
-          feedback: `Your response ("${studentAns || 'empty'}") does not address the question. Please provide an explanation explaining the underlying principles.`
+          feedback: `Your response ("${studentAns || 'empty'}") does not address the question. Please provide an explanation detailing the underlying principles.`
         });
       }
 
@@ -209,20 +209,21 @@ Here is your high-yield, exam-focused revision grounded in your materials:
       const hasKeywords = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('shortcut') || ansLower.includes('flow') || ansLower.includes('skip') || ansLower.includes('vanish') || ansLower.includes('+ 1') || ansLower.includes('+1');
       const hasMath = ansLower.includes('dh/dx') || ansLower.includes('df/dx') || ansLower.includes('+ 1') || ansLower.includes('+1') || ansLower.includes('identity');
 
-      let score = 15;
+      let score = 10;
       if (hasKeywords && hasMath) score = 92;
-      else if (hasKeywords) score = 85;
-      else if (ansTrimmed.length > 40) score = 40;
+      else if (hasKeywords) score = 80;
+      else if (ansTrimmed.length > 50 && (ansLower.includes('layer') || ansLower.includes('network') || ansLower.includes('connection'))) score = 35;
+      else score = 10;
 
       const isCorrect = score >= 60;
       return JSON.stringify({
         isCorrect,
         aiScore: score,
         understanding: score >= 80 ? 'Demonstrates thorough comprehension of gradient mechanics and structural bypass.' : 'Shows minimal intuition, missing key technical principles.',
-        accuracy: score >= 80 ? 'Accurate statement of identity bypass.' : 'Inaccurate or missing mechanism description.',
-        relevance: 'Directly addresses the question prompt.',
+        accuracy: score >= 80 ? 'Accurate statement of identity bypass.' : 'Inaccurate or missing mechanism description (Score: 10%).',
+        relevance: score >= 60 ? 'Directly addresses the question prompt.' : 'Answer does not demonstrate mastery of core concept.',
         keyConceptsCovered: score >= 60 ? ['Residual bypass', 'Gradient flow'] : [],
-        missingConcepts: score < 85 ? ['Explicit mathematical derivative dH/dx = dF/dx + 1'] : ['Fundamental skip mechanism'],
+        missingConcepts: score < 80 ? ['Explicit mathematical derivative dH/dx = dF/dx + 1'] : [],
         feedback: score >= 80
           ? 'Great job! You clearly stated how identity paths prevent gradient degradation.'
           : 'To achieve mastery, explain that the identity derivative (+1) ensures gradient flow cannot degrade to zero during backpropagation.'
@@ -257,6 +258,16 @@ Here is your high-yield, exam-focused revision grounded in your materials:
     }
 
     // 3. Unsupported question handling (PRD Sec 7)
+    if (options.prompt.includes('NO_DOCUMENTS_IN_PROJECT')) {
+      return `It looks like you haven't uploaded any study materials or course notes to this Project yet.
+
+To get started:
+1. Go to the **Knowledge Hub / Materials** tab on the left.
+2. Upload your PDF notes, slides, or textbook chapters.
+
+Once uploaded, our **FAISS Vector Engine** indexes all your chunks, and you can ask me anything in any format—summaries, concept explanations, practice questions, or Telugu queries!`;
+    }
+
     if (options.prompt.includes('UNSUPPORTED_QUESTION_FLAG') || promptLower.includes('bake a cake') || promptLower.includes('chocolate') || promptLower.includes('capital of')) {
       return `I evaluated your question against the uploaded learning materials for this Project, but **insufficient evidence** exists in the project notes to reliably answer this.
 

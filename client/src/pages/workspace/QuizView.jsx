@@ -211,7 +211,7 @@ export const QuizView = ({ projectId }) => {
           {/* Questions List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {activeQuiz.questions?.map((q, idx) => {
-              const evalItem = result?.answers?.find((a) => a.questionId === q.id);
+              const evalItem = result?.answers?.find((a) => (a.questionId || a.question_id) === q.id);
               const isOpenEnded = q.type === 'open_ended';
 
               return (
@@ -318,18 +318,16 @@ export const QuizView = ({ projectId }) => {
                             <XCircle size={16} color="#e11d48" />
                           )}
                           <span style={{ fontWeight: 600, fontSize: 12, color: evalItem.isCorrect ? '#065f46' : '#9f1239' }}>
-                            {evalItem.isCorrect ? 'Correct & Mastered' : 'Needs Review'}
+                            {evalItem.isCorrect ? 'Correct & Mastered' : 'Needs Review'} (Score: {evalItem.ai_score ?? evalItem.evaluation?.aiScore ?? 0}%)
                           </span>
                         </div>
-                        {evalItem.rubricScore && (
-                          <span className="badge badge-neutral" style={{ fontSize: 11 }}>
-                            Rubric Score: {evalItem.rubricScore} / 5
-                          </span>
-                        )}
+                        <span className="badge badge-neutral" style={{ fontSize: 11 }}>
+                          Rubric: {(evalItem.rubricScore != null ? evalItem.rubricScore : ((evalItem.ai_score ?? evalItem.evaluation?.aiScore ?? 0) / 20)).toFixed(1)} / 5.0
+                        </span>
                       </div>
 
                       <p style={{ fontSize: 12, color: '#334155', lineHeight: 1.5, margin: 0 }}>
-                        {evalItem.feedback || 'Conceptual evaluation recorded in your mastery profile.'}
+                        {evalItem.evaluation?.feedback || evalItem.feedback || 'Conceptual evaluation recorded in your mastery profile.'}
                       </p>
                     </div>
                   )}

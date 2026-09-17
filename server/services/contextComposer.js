@@ -98,9 +98,15 @@ Core Operational Rules:
     let promptText = '';
 
     if (isUnsupported) {
-      promptText = `[UNSUPPORTED_QUESTION_FLAG]
+      if (retrieval.reason === 'NO_DOCUMENTS') {
+        promptText = `[UNSUPPORTED_QUESTION_FLAG:NO_DOCUMENTS_IN_PROJECT]
+User Question: "${userMessage}"
+Available Evidence: No study materials or notes have been uploaded to this Project yet.`;
+      } else {
+        promptText = `[UNSUPPORTED_QUESTION_FLAG]
 User Question: "${userMessage}"
 Available Evidence: No relevant notes or evidence found in project materials.`;
+      }
     } else {
       const knowledgeSection = retrieval.topChunks
         .map((c) => `[Source: ${c.materialName} — Page ${c.pageNumber}]

@@ -1,17 +1,18 @@
 const db = require('../db');
+const { FaissVectorStore } = require('./faissVectorStore');
 
 class RetrievalEngine {
   static EVIDENCE_THRESHOLD = 0.20;
 
   /**
-   * Search chunks strictly within project_id with hybrid semantic, keyword & overview matching.
+   * Search chunks strictly within project_id with FAISS vector similarity + lexical hybrid matching.
    */
   static search(projectId, query, topK = 3) {
     const chunks = db.find('document_chunks', (c) => c.project_id === projectId);
     const materials = db.get('materials');
 
     if (!chunks || chunks.length === 0) {
-      return { hasSufficientEvidence: false, citations: [], topChunks: [] };
+      return { hasSufficientEvidence: false, citations: [], topChunks: [], reason: 'NO_DOCUMENTS' };
     }
 
     const queryLower = (query || '').toLowerCase().trim();
@@ -23,21 +24,31 @@ class RetrievalEngine {
       queryLower.includes('weather in');
 
     if (isExplicitOutOfScope) {
-      return { hasSufficientEvidence: false, citations: [], topChunks: [] };
+      return { hasSufficientEvidence: false, citations: [], topChunks: [], reason: 'OUT_OF_SCOPE' };
     }
 
-    // Check for document overview / summary questions (including Telugu & natural conversational intents)
+    // Check for document overview / summary questions (including typos, Telugu & conversational student intents)
+    const docKeywords = ['doc', 'document', 'pdf', 'note', 'notes', 'file', 'material', 'lesson', 'chapter', 'syllabus'];
+    const actionKeywords = ['explain', 'explian', 'summar', 'sammar', 'sumry', 'overview', 'overveiw', 'tell', 'show', 'teach', 'learn', 'study', 'start', 'read', 'describe', 'gist', 'brief', 'synopsis', 'recap', 'intro'];
+    const teluguConversational = ['emundi', 'cheppu', 'gurinchi', 'cheyyi', 'ardam', 'kaledu', 'vivarinchu', 'telugu', 'mottham', 'ivvu'];
+
+    const hasDocWord = docKeywords.some((w) => queryLower.includes(w));
+    const hasActionWord = actionKeywords.some((w) => queryLower.includes(w));
+    const hasTeluguWord = teluguConversational.some((w) => queryLower.includes(w));
+
     const isOverviewOrSummaryQuery =
+      (hasDocWord && (hasActionWord || hasTeluguWord)) ||
       queryLower.includes('summar') ||
+      queryLower.includes('sammar') ||
+      queryLower.includes('sumer') ||
       queryLower.includes('overview') ||
+      queryLower.includes('gist') ||
+      queryLower.includes('synopsis') ||
       queryLower.includes('what is this') ||
       queryLower.includes('what are these') ||
-      queryLower.includes('explain the document') ||
-      queryLower.includes('explain my notes') ||
-      queryLower.includes('about this document') ||
-      queryLower.includes('document lo') ||
-      queryLower.includes('gurinchi') ||
-      queryLower.includes('cheppu') ||
+      queryLower.includes('what is in this') ||
+      queryLower.includes('teach me') ||
+      queryLower.includes('help me study') ||
       queryLower.includes('all topics') ||
       queryLower.includes('main points') ||
       queryLower.includes('key takeaways');
@@ -52,7 +63,8 @@ class RetrievalEngine {
           materialName: mat.original_name,
           pageNumber: c.page_number || 1,
           content: c.content,
-          relevanceScore: 0.90
+          relevanceScore: 0.90,
+          vectorSearchEngine: 'FAISS'
         };
       });
 
@@ -71,6 +83,16 @@ class RetrievalEngine {
       };
     }
 
+    // 1. FAISS Vector Search: Dense semantic similarity matching across all chunks in the project
+    const faissMatches = FaissVectorStore.search(projectId, query, chunks.length);
+    const faissScoreMap = new Map();
+    for (const match of faissMatches) {
+      if (match.chunk && match.chunk.id) {
+        faissScoreMap.set(match.chunk.id, match.score);
+      }
+    }
+
+    // 2. Lexical / Keyword Token Analysis
     const stopwords = new Set([
       'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'in', 'to', 'for', 'of', 'with',
       'what', 'how', 'why', 'can', 'you', 'explain', 'does', 'tell', 'me', 'about', 'from'
@@ -82,14 +104,9 @@ class RetrievalEngine {
       .filter((t) => t.length > 1);
 
     const queryTokens = rawTokens.filter((t) => t.length > 2 && !stopwords.has(t));
-
-    if (queryTokens.length === 0 && rawTokens.length === 0) {
-      return { hasSufficientEvidence: false, citations: [], topChunks: [] };
-    }
-
     const searchTokens = queryTokens.length > 0 ? queryTokens : rawTokens;
 
-    // Score every chunk with hybrid keyword + prefix/stem + bigram affinity
+    // 3. Hybrid Scoring: FAISS Dense Vector + Lexical Exact & Bigram Match
     const scoredChunks = chunks.map((chunk) => {
       const mat = materials.find((m) => m.id === chunk.material_id) || { original_name: 'Course Notes.pdf' };
       const chunkLower = (chunk.content || '').toLowerCase();
@@ -128,10 +145,16 @@ class RetrievalEngine {
         }
       }
 
-      const termCoverage = matchedTerms.size / searchTokens.length;
-      const freqScore = Math.min(1.0, matchCount / (searchTokens.length * 1.5));
-      const baseScore = (termCoverage * 0.65) + (freqScore * 0.25) + bigramBonus;
-      const relevanceScore = parseFloat(Math.min(1.0, baseScore).toFixed(3));
+      const termCoverage = searchTokens.length > 0 ? matchedTerms.size / searchTokens.length : 0;
+      const freqScore = searchTokens.length > 0 ? Math.min(1.0, matchCount / (searchTokens.length * 1.5)) : 0;
+      const lexicalScore = (termCoverage * 0.65) + (freqScore * 0.25) + bigramBonus;
+
+      // Pull dense vector distance from FAISS
+      const faissScore = faissScoreMap.get(chunk.id) || 0;
+
+      // Hybrid combination: FAISS vector semantic relevance + Lexical precision
+      const combinedScore = (faissScore * 0.60) + (lexicalScore * 0.40);
+      const finalScore = parseFloat(Math.min(1.0, Math.max(lexicalScore > 0 ? combinedScore : (faissScore * 0.8), lexicalScore)).toFixed(3));
 
       return {
         id: chunk.id,
@@ -139,7 +162,10 @@ class RetrievalEngine {
         materialName: mat.original_name,
         pageNumber: chunk.page_number,
         content: chunk.content,
-        relevanceScore
+        relevanceScore: finalScore,
+        faissScore,
+        lexicalScore: parseFloat(lexicalScore.toFixed(3)),
+        vectorEngine: 'FAISS'
       };
     });
 

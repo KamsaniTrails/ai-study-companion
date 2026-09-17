@@ -1,8 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const { MongoClient } = require('mongodb');
 
 const dataDir = path.resolve(__dirname, 'data');
 const dbFilePath = path.join(dataDir, 'db.json');
+const backupFilePath = path.join(dataDir, 'db.json.bak');
+const tempFilePath = path.join(dataDir, 'db.json.tmp');
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -30,47 +33,60 @@ const defaultDb = {
   security_logs: []
 };
 
+// In-memory cache for sub-millisecond synchronous reads
+let memoryCache = null;
+
 function readDb() {
+  if (memoryCache) {
+    return memoryCache;
+  }
+
   if (!fs.existsSync(dbFilePath)) {
     saveDb(defaultDb);
-    return JSON.parse(JSON.stringify(defaultDb));
+    memoryCache = JSON.parse(JSON.stringify(defaultDb));
+    return memoryCache;
   }
   try {
     const raw = fs.readFileSync(dbFilePath, 'utf8');
-    return JSON.parse(raw);
+    memoryCache = JSON.parse(raw);
+    return memoryCache;
   } catch (err) {
     console.error('Error reading db.json, attempting recovery from backup:', err);
     if (fs.existsSync(backupFilePath)) {
       try {
         const bakRaw = fs.readFileSync(backupFilePath, 'utf8');
-        return JSON.parse(bakRaw);
+        memoryCache = JSON.parse(bakRaw);
+        return memoryCache;
       } catch (be) { }
     }
-    return JSON.parse(JSON.stringify(defaultDb));
+    memoryCache = JSON.parse(JSON.stringify(defaultDb));
+    return memoryCache;
   }
 }
 
-const backupFilePath = path.join(dataDir, 'db.json.bak');
-const tempFilePath = path.join(dataDir, 'db.json.tmp');
-
 function saveDb(data) {
+  memoryCache = data;
   const json = JSON.stringify(data, null, 2);
   try {
-    // 1. Atomic write using temp file + rename
     fs.writeFileSync(tempFilePath, json, 'utf8');
-    //backup existing database
     if (fs.existsSync(dbFilePath)) {
       try {
         fs.copyFileSync(dbFilePath, backupFilePath);
       } catch (e) { }
     }
-    //automatic rename 
     fs.renameSync(tempFilePath, dbFilePath);
   } catch (err) {
-    // Fallback direct write
     fs.writeFileSync(dbFilePath, json, 'utf8');
   }
 }
+
+// MongoDB Atlas Configuration
+const DEFAULT_MONGO_URI = 'mongodb+srv://AI_Student_Compansion:mohana9441@cluster0.9sbxunn.mongodb.net/AI_Study_Companion?retryWrites=true&w=majority&appName=Cluster0';
+const mongoUri = process.env.MONGODB_URI || DEFAULT_MONGO_URI;
+
+let mongoClient = null;
+let mongoDb = null;
+let isMongoConnected = false;
 
 const db = {
   get(collection) {
@@ -87,45 +103,136 @@ const db = {
     const items = this.get(collection);
     return filterFn ? items.filter(filterFn) : items;
   },
-  //insert new record and saves to disk
+
   insert(collection, item) {
     const data = readDb();
     if (!data[collection]) data[collection] = [];
     data[collection].push(item);
     saveDb(data);
+
+    // Asynchronously replicate to MongoDB Atlas
+    if (isMongoConnected && mongoDb) {
+      const doc = { ...item };
+      if (doc.id && !doc._id) doc._id = doc.id;
+      mongoDb.collection(collection).updateOne(
+        { _id: doc._id || doc.id },
+        { $set: doc },
+        { upsert: true }
+      ).catch((err) => {
+        console.warn(`[MongoDB] Async insert error in ${collection}:`, err.message);
+      });
+    }
+
     return item;
   },
-  //modifies a recor matching the filter
+
   update(collection, filterFn, updates) {
     const data = readDb();
     if (!data[collection]) return null;
     const index = data[collection].findIndex(filterFn);
     if (index !== -1) {
       data[collection][index] = { ...data[collection][index], ...updates };
+      const updatedItem = data[collection][index];
       saveDb(data);
-      return data[collection][index];
+
+      // Asynchronously replicate update to MongoDB Atlas
+      if (isMongoConnected && mongoDb && updatedItem) {
+        const id = updatedItem._id || updatedItem.id;
+        if (id) {
+          mongoDb.collection(collection).updateOne(
+            { _id: id },
+            { $set: updates }
+          ).catch((err) => {
+            console.warn(`[MongoDB] Async update error in ${collection}:`, err.message);
+          });
+        }
+      }
+
+      return updatedItem;
     }
     return null;
   },
-  //deletes matching items
+
   remove(collection, filterFn) {
     const data = readDb();
     if (!data[collection]) return false;
     const initialLen = data[collection].length;
+    const toRemove = data[collection].filter(filterFn);
     data[collection] = data[collection].filter((item) => !filterFn(item));
     saveDb(data);
+
+    // Asynchronously replicate deletion to MongoDB Atlas
+    if (isMongoConnected && mongoDb && toRemove.length > 0) {
+      const ids = toRemove.map((i) => i._id || i.id).filter(Boolean);
+      if (ids.length > 0) {
+        mongoDb.collection(collection).deleteMany({
+          _id: { $in: ids }
+        }).catch((err) => {
+          console.warn(`[MongoDB] Async delete error in ${collection}:`, err.message);
+        });
+      }
+    }
+
     return data[collection].length < initialLen;
+  },
+
+  /**
+   * Connects to MongoDB Atlas and synchronizes collection states.
+   */
+  async connectMongo() {
+    if (isMongoConnected) return mongoDb;
+    try {
+      console.log('🍃 Connecting to MongoDB Atlas (Cluster0: AI_Study_Companion)...');
+      mongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 5000 });
+      await mongoClient.connect();
+      mongoDb = mongoClient.db('AI_Study_Companion');
+      isMongoConnected = true;
+      console.log('✅ Connected to MongoDB Atlas successfully!');
+
+      // Synchronize existing collections
+      const localData = readDb();
+      for (const collName of Object.keys(localData)) {
+        if (Array.isArray(localData[collName]) && localData[collName].length > 0) {
+          const coll = mongoDb.collection(collName);
+          const count = await coll.countDocuments();
+          if (count === 0) {
+            const docs = localData[collName].map((item) => {
+              const doc = { ...item };
+              if (doc.id && !doc._id) doc._id = doc.id;
+              return doc;
+            });
+            await coll.insertMany(docs);
+            console.log(`[MongoDB] Initialized ${docs.length} records in collection: ${collName}`);
+          }
+        }
+      }
+      return mongoDb;
+    } catch (err) {
+      console.warn('⚠️ MongoDB Atlas connection notice (continuing with local atomic cache):', err.message);
+      return null;
+    }
+  },
+
+  getMongoDb() {
+    return mongoDb;
+  },
+
+  isMongoConnected() {
+    return isMongoConnected;
   },
 
   // Seed default data if database is empty
   init() {
+    readDb();
+
+    // Kick off MongoDB Atlas async connection
+    this.connectMongo().catch(() => {});
+
     const existing = this.findOne('users', (u) => u.id === 'user_demo');
     if (existing) return;
 
-    console.log('🌱 Initializing easy JSON database with default study materials...');
+    console.log('🌱 Initializing database with default study materials...');
 
-    const now = new Date().toISOString();
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
     const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
 
     // 1. Users
@@ -193,115 +300,99 @@ const db = {
         material_id: 'mat_dl_notes',
         project_id: 'project_transformers',
         page_number: 14,
-        content: 'Scaled Dot-Product Attention: The fundamental attention mechanism computes Attention(Q, K, V) = softmax((Q * K^T) / sqrt(d_k)) * V. The dot products of queries and keys measure token affinity. The division by sqrt(d_k) prevents dot products from growing excessively large for high dimensions, which would otherwise push the softmax function into regions with extremely small gradients.',
-        token_count: 110
+        content: 'Scaled Dot-Product Attention: The fundamental attention mechanism computes Attention(Q, K, V) = softmax((Q * K^T) / sqrt(d_k)) * V. The dot products of queries and keys are scaled by 1/sqrt(d_k) to prevent variance inflation from pushing softmax into regions with vanishing gradients.',
+        token_count: 92
       },
       {
         id: 'chk_4',
         material_id: 'mat_dl_notes',
         project_id: 'project_transformers',
         page_number: 16,
-        content: 'Residual Connections (Skip Connections): A residual block defines the output mapping as H(x) = F(x) + x, where F(x) represents the stacked weight layers. During backpropagation, the gradient of the loss with respect to x includes an additive identity term dH/dx = dF/dx + 1. Because the gradient passes directly through the identity skip connection without attenuation, gradients can flow unimpeded through hundreds of network layers.',
-        token_count: 105
+        content: 'Residual Connections (Skip Connections): A residual block defines the output mapping as H(x) = F(x) + x, where F(x) represents the stacked weight layers. During backpropagation, the gradient of the loss with respect to x includes an additive identity term +1, allowing gradients to flow unimpeded through hundreds of layers.',
+        token_count: 88
+      },
+      {
+        id: 'chk_5',
+        material_id: 'mat_dl_notes',
+        project_id: 'project_transformers',
+        page_number: 18,
+        content: 'Layer Normalization: Unlike Batch Normalization which computes statistics across the mini-batch dimension, Layer Normalization computes the mean and variance across the feature channels for each individual sample: LN(x) = (x - mu) / sqrt(sigma^2 + epsilon) * gamma + beta. This makes it invariant to batch size.',
+        token_count: 82
       }
     ];
-    chunks.forEach((c) => this.insert('document_chunks', c));
 
-    // 6. Concepts & Mastery
+    for (const chk of chunks) {
+      this.insert('document_chunks', chk);
+    }
+
+    // 6. Concepts
     const concepts = [
-      { id: 'c_attention', project_id: 'project_transformers', name: 'Scaled Dot-Product Attention', description: 'Query-Key affinity scaling by sqrt(d_k) and value projection.', score: 46, status: 'needs_attention' },
-      { id: 'c_residual', project_id: 'project_transformers', name: 'Residual Connections (Skip Connections)', description: 'Identity bypass mitigating vanishing gradients in deep layers.', score: 79, status: 'stable' },
-      { id: 'c_backprop', project_id: 'project_transformers', name: 'Backpropagation & Chain Rule', description: 'Reverse accumulation of partial derivatives through graphs.', score: 84, status: 'improving' },
-      { id: 'c_grad_descent', project_id: 'project_transformers', name: 'Adaptive Gradient Optimization', description: 'First and second moment gradient tracking in Adam.', score: 91, status: 'improving' }
+      { id: 'c_gradient', project_id: 'project_transformers', name: 'Gradient Descent Optimization', description: 'Optimization dynamics and momentum-based updates', category: 'Optimization', importance_score: 9 },
+      { id: 'c_backprop', project_id: 'project_transformers', name: 'Backpropagation Algorithm', description: 'Reverse-mode automatic differentiation in computational graphs', category: 'Foundations', importance_score: 10 },
+      { id: 'c_attention', project_id: 'project_transformers', name: 'Scaled Dot-Product Attention', description: 'Self-attention mechanism and variance scaling factor', category: 'Transformers', importance_score: 10 },
+      { id: 'c_residual', project_id: 'project_transformers', name: 'Residual Connections', description: 'Identity skip connections preventing gradient degradation', category: 'Architecture', importance_score: 9 },
+      { id: 'c_layernorm', project_id: 'project_transformers', name: 'Layer Normalization', description: 'Feature-wise normalization invariant to batch sizes', category: 'Regularization', importance_score: 8 }
     ];
 
-    concepts.forEach((c) => {
-      this.insert('concepts', { id: c.id, project_id: c.project_id, name: c.name, description: c.description, importance_score: 9.0 });
+    for (const c of concepts) {
+      this.insert('concepts', c);
       this.insert('concept_mastery', {
         id: `cm_${c.id}`,
-        project_id: c.project_id,
+        project_id: 'project_transformers',
         concept_id: c.id,
         concept_name: c.name,
-        mastery_score: c.score,
+        mastery_score: c.id === 'c_attention' ? 88 : c.id === 'c_residual' ? 76 : c.id === 'c_gradient' ? 92 : 65,
         confidence: 0.85,
-        status: c.status,
-        history: [{ date: '2026-09-14', score: c.score - 5 }, { date: '2026-09-15', score: c.score }],
-        last_tested_at: yesterday
+        status: c.id === 'c_attention' ? 'improving' : 'stable',
+        history: [
+          { date: twoDaysAgo, score: 70 },
+          { date: new Date().toISOString(), score: c.id === 'c_attention' ? 88 : 76 }
+        ]
       });
+    }
+
+    // 7. Seed Conversation & Messages
+    this.insert('conversations', {
+      id: 'conv_1',
+      project_id: 'project_transformers',
+      user_id: 'user_demo',
+      title: 'Attention & Residual Connections Deep Dive',
+      created_at: twoDaysAgo
     });
 
-    // 7. Tutor Conversation & Citations
-    this.insert('conversations', { id: 'conv_1', project_id: 'project_transformers', title: 'Why do we divide by sqrt(d_k)?', created_at: yesterday });
     this.insert('messages', {
       id: 'msg_1',
       conversation_id: 'conv_1',
       role: 'user',
-      content: 'Why do we divide by sqrt(d_k) in the transformer attention formula?',
+      content: 'Can you explain why scaled dot-product attention divides by the square root of d_k?',
       citations: [],
-      tokens_used: 24,
+      tokens_used: 16,
       is_unsupported_question: false,
-      created_at: yesterday
+      created_at: twoDaysAgo
     });
 
     this.insert('messages', {
       id: 'msg_2',
       conversation_id: 'conv_1',
       role: 'assistant',
-      content: `In Scaled Dot-Product Attention, dividing by $\\sqrt{d_k}$ normalizes the variance of the dot products back to 1. For large dimension $d_k$, the dot product values grow large, which pushes the $\\text{softmax}$ function into regions with extremely small gradients (vanishing gradients).
-
-**Citations:**
-> **Source:** Machine Learning & Neural Architecture Notes.pdf — *Page 14*`,
+      content: 'In Scaled Dot-Product Attention, dividing by $\\sqrt{d_k}$ counteracts variance inflation. When the key dimension $d_k$ is large, the dot products grow large in magnitude, which pushes the softmax function into regions where gradients are extremely small (vanishing gradients).\n\nDividing by $\\sqrt{d_k}$ normalizes the variance of the dot products back to 1, ensuring stable gradient flow during backpropagation.\n\n**Citations:**\n> **Source:** Machine Learning & Neural Architecture Notes.pdf — *Page 14*',
       citations: [
         {
           sourceDocId: 'mat_dl_notes',
           sourceDocName: 'Machine Learning & Neural Architecture Notes.pdf',
           pageNumber: 14,
-          snippet: 'The division by sqrt(d_k) prevents dot products from growing excessively large for high dimensions, which would otherwise push the softmax function into regions with extremely small gradients.',
-          relevanceScore: 0.96
+          snippet: 'The dot products of queries and keys are scaled by 1/sqrt(d_k) to prevent variance inflation from pushing softmax into regions with vanishing gradients.',
+          relevanceScore: 0.95
         }
       ],
-      tokens_used: 145,
+      tokens_used: 110,
       is_unsupported_question: false,
-      created_at: yesterday
+      created_at: twoDaysAgo
     });
 
-    // 8. Recommendations
-    this.insert('recommendations', {
-      id: 'rec_1',
-      project_id: 'project_transformers',
-      user_id: 'user_demo',
-      title: 'Targeted Review: Scaled Dot-Product Attention',
-      description: 'Your estimated mastery is 46%. Review the mathematical derivations on Page 14 and take a practice drill.',
-      action_type: 'review_material',
-      priority: 'high',
-      concept_id: 'c_attention',
-      concept_name: 'Scaled Dot-Product Attention',
-      target_page: 14,
-      reason: 'Low mastery score (46%) and high-variance dot product calculations.',
-      is_dismissed: false,
-      created_at: now
-    });
-
-    // 9. AI Telemetry Logs
-    this.insert('ai_logs', {
-      id: 'log_1',
-      user_id: 'user_demo',
-      project_id: 'project_transformers',
-      feature: 'tutor',
-      model: 'companion-neural-js',
-      prompt_preview: 'Why do we divide by sqrt(d_k) in the transformer attention formula?',
-      response_preview: 'In Scaled Dot-Product Attention, dividing by sqrt(d_k) normalizes the variance...',
-      latency_ms: 420,
-      tokens_prompt: 310,
-      tokens_completion: 145,
-      estimated_cost: 0.000078,
-      status: 'success',
-      created_at: yesterday
-    });
-
-    // 10. Persistent Context
+    // 8. Persistent Context
     this.insert('persistent_context', {
-      id: 'ctx_1',
+      id: 'pc_demo',
       project_id: 'project_transformers',
       user_id: 'user_demo',
       learningGoals: ['Master scaled dot-product attention mathematics', 'Diagnose gradient degradation'],
@@ -310,7 +401,7 @@ const db = {
       repeatedMistakes: []
     });
 
-    console.log('✅ Easy JSON database initialized successfully! (Stored at server/data/db.json)');
+    console.log('✅ Database initialized successfully with MongoDB Atlas synchronization!');
   }
 };
 

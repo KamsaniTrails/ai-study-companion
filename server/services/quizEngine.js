@@ -121,7 +121,7 @@ class QuizEngine {
       } else {
         // Open-ended rubric grading
         const cleanAnswer = (userAnswerText || '').trim();
-        const isTrivialGreeting = /^(hlo|hello|hi|hey|test|yo|sup|none|na|nil|ok|k|good|bad|idk|i don'?t know)\.?$/i.test(cleanAnswer);
+        const isTrivialGreeting = /^(hlo|hello|hi|hey|test|yo|sup|none|na|nil|ok|k|good|bad|idk|i don'?t know|no idea|pass|bye)(\s.*)?$/i.test(cleanAnswer);
 
         if (cleanAnswer.length < 15 || isTrivialGreeting) {
           aiScore = 0;
@@ -129,12 +129,12 @@ class QuizEngine {
           evaluation = {
             isCorrect: false,
             aiScore: 0,
-            understanding: 'No conceptual explanation provided. Response is too brief or off-topic.',
+            understanding: 'No conceptual explanation provided. Response is a greeting, too brief, or non-responsive.',
             accuracy: '0% - Does not address the target concept or question.',
             relevance: 'Irrelevant or minimal response.',
             keyConceptsCovered: [],
             missingConcepts: [q.concept_name],
-            feedback: `Your response ("${userAnswerText || 'empty'}") does not answer the question. Please provide a substantive explanation explaining how ${q.concept_name} operates.`
+            feedback: `Your response ("${userAnswerText || 'empty'}") does not answer the question. A relevant, substantive explanation of ${q.concept_name} is required to earn credit.`
           };
         } else {
           try {
@@ -146,7 +146,7 @@ class QuizEngine {
               questionPrompt: q.prompt,
               conceptName: q.concept_name,
               modelSolution: q.correct_answer,
-              prompt: `You are an academic assessment grading engine. Evaluate the student's answer strictly against the model solution.\nStudent Answer: "${cleanAnswer}"\nQuestion: "${q.prompt}"\nTarget Concept: ${q.concept_name}\nModel Solution: ${q.correct_answer}\nGrade on a scale of 0 to 100 based strictly on whether the student's answer correctly explains the core mechanism. Respond with valid JSON: { "isCorrect": boolean, "aiScore": number, "understanding": string, "accuracy": string, "relevance": string, "keyConceptsCovered": string[], "missingConcepts": string[], "feedback": string }`
+              prompt: `You are an academic assessment grading engine. Evaluate the student's answer strictly against the model solution.\nStudent Answer: "${cleanAnswer}"\nQuestion: "${q.prompt}"\nTarget Concept: ${q.concept_name}\nModel Solution: ${q.correct_answer}\nGrade on a scale of 0 to 100 based strictly on whether the student's answer correctly explains the core mechanism. If the answer is completely wrong or unrelated, grade between 0 and 10. Respond with valid JSON: { "isCorrect": boolean, "aiScore": number, "understanding": string, "accuracy": string, "relevance": string, "keyConceptsCovered": string[], "missingConcepts": string[], "feedback": string }`
             });
             evaluation = res.data;
             aiScore = Math.min(100, Math.max(0, evaluation.aiScore ?? 0));
@@ -155,13 +155,13 @@ class QuizEngine {
             // Local rubric fallback on network/AI error
             const ansLower = cleanAnswer.toLowerCase();
             const hasMechanism = ansLower.includes('gradient') || ansLower.includes('derivative') || ansLower.includes('skip') || ansLower.includes('identity') || ansLower.includes('bypass') || ansLower.includes('flow') || ansLower.includes('shortcut');
-            aiScore = hasMechanism ? 80 : 20;
+            aiScore = hasMechanism ? 80 : 10;
             isCorrect = aiScore >= 60;
             evaluation = {
               isCorrect,
               aiScore,
               understanding: isCorrect ? 'Demonstrates basic conceptual intuition of the mechanism.' : 'Lacks core technical justification.',
-              accuracy: isCorrect ? 'Partially aligned with model principles.' : 'Does not cover the fundamental mechanism.',
+              accuracy: isCorrect ? 'Partially aligned with model principles.' : 'Does not cover the fundamental mechanism (Score: 10%).',
               relevance: 'Evaluated against question prompt.',
               keyConceptsCovered: isCorrect ? [q.concept_name] : [],
               missingConcepts: isCorrect ? ['Mathematical derivative formulation'] : [q.concept_name],
@@ -179,12 +179,14 @@ class QuizEngine {
         id: `ans_${Date.now()}_${q.id}`,
         attempt_id: attemptId,
         question_id: q.id,
+        questionId: q.id,
         question_prompt: q.prompt,
         question_type: q.type,
         concept_name: q.concept_name,
         user_answer: userAnswerText,
         is_correct: isCorrect,
         ai_score: aiScore,
+        rubricScore: Math.round((aiScore / 20) * 10) / 10,
         evaluation
       };
       db.insert('quiz_answers', ansRecord);

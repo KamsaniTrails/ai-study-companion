@@ -1,10 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
+const { PDFParse } = require('pdf-parse');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { backgroundQueue } = require('./backgroundQueue');
+const { FaissVectorStore } = require('./faissVectorStore');
 
 class DocumentProcessor {
   static init() {
@@ -38,21 +38,35 @@ class DocumentProcessor {
         if (ext === '.pdf') {
           detectedFormat = 'pdf';
           try {
-            const parsed = await pdfParse(fileBuffer);
-            fullText = parsed.text;
-            const numPages = Math.max(1, parsed.numpages || 1);
-            const words = fullText.split(/\s+/);
-            const wordsPerPage = Math.max(150, Math.floor(words.length / numPages));
-
-            for (let p = 1; p <= numPages; p++) {
-              const start = (p - 1) * wordsPerPage;
-              const pageContent = words.slice(start, start + wordsPerPage).join(' ');
-              if (pageContent.trim().length > 0) {
-                pageTexts.push({ page: p, text: pageContent });
+            if (PDFParse) {
+              const parser = new PDFParse({ data: fileBuffer });
+              await parser.load();
+              const parsed = await parser.getText();
+              fullText = parsed.text || '';
+              if (parsed.pages && parsed.pages.length > 0) {
+                pageTexts = parsed.pages.map((p, idx) => ({
+                  page: idx + 1,
+                  text: (p.text || '').trim()
+                })).filter((p) => p.text.length > 0);
+              }
+              await parser.destroy().catch(() => {});
+            }
+            if (pageTexts.length === 0 && fullText) {
+              const numPages = Math.max(1, Math.ceil(fullText.length / 2000));
+              const words = fullText.split(/\s+/);
+              const wordsPerPage = Math.max(100, Math.floor(words.length / numPages));
+              for (let p = 1; p <= numPages; p++) {
+                const start = (p - 1) * wordsPerPage;
+                const pageContent = words.slice(start, start + wordsPerPage).join(' ');
+                if (pageContent.trim().length > 0) {
+                  pageTexts.push({ page: p, text: pageContent });
+                }
               }
             }
           } catch (pdfErr) {
-            fullText = fileBuffer.toString('utf-8', 0, 40000);
+            console.error('[DocumentProcessor] PDF parse error:', pdfErr.message);
+            const cleanText = fileBuffer.toString('latin1').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+            fullText = cleanText.length > 50 ? cleanText.slice(0, 10000) : `Course Document: ${originalName}`;
             pageTexts.push({ page: 1, text: fullText });
           }
         } else if (ext === '.docx' || ext === '.doc') {
@@ -168,14 +182,16 @@ class DocumentProcessor {
 
         for (const chunkContent of chunks) {
           chunkIndex++;
-          db.insert('document_chunks', {
+          const chunkRecord = {
             id: `chk_${Date.now()}_${chunkIndex}`,
             material_id: materialId,
             project_id: projectId,
             page_number: p.page,
             content: chunkContent.trim(),
             token_count: Math.max(10, Math.floor(chunkContent.length / 4))
-          });
+          };
+          db.insert('document_chunks', chunkRecord);
+          FaissVectorStore.addChunk(projectId, chunkRecord);
         }
       }
 

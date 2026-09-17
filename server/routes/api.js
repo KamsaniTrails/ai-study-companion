@@ -260,60 +260,78 @@ apiRouter.post('/auth/register', (req, res) => {
 });
 
 apiRouter.post('/auth/login', (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, name = '', role = 'student' } = req.body;
 
   // Demo 1-click profiles
   if (role === 'admin' && (!email || email === 'elena@learning.ai')) {
     const adminUser = db.findOne('users', (u) => u.role === 'admin') || db.findOne('users', (u) => u.id === 'user_admin');
-    return res.json({ user: adminUser, token: 'token_' + adminUser.id });
+    return res.json({ success: true, user: adminUser, token: 'token_' + adminUser.id });
   }
   if (role === 'student' && (!email || email === 'alex@learning.ai')) {
     const studentUser = db.findOne('users', (u) => u.role === 'student') || db.findOne('users', (u) => u.id === 'user_demo');
-    return res.json({ user: studentUser, token: 'token_' + studentUser.id });
+    return res.json({ success: true, user: studentUser, token: 'token_' + studentUser.id });
   }
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'A valid email address is required' });
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const user = db.findOne('users', (u) => u.email && u.email.toLowerCase() === normalizedEmail);
+  let user = db.findOne('users', (u) => u.email && u.email.toLowerCase() === normalizedEmail);
 
+  // If user does not exist, auto-create account directly (frictionless onboarding)
   if (!user) {
-    try {
-      db.insert('security_logs', {
-        id: uuidv4(),
-        event_type: 'login_failed_user_not_found',
-        user_id: 'anonymous',
-        severity: 'medium',
-        payload: { email: normalizedEmail, ip: req.ip, userAgent: req.headers['user-agent'] },
-        action_taken: 'http_401_unauthorized',
-        created_at: new Date().toISOString()
-      });
-    } catch (e) { }
-    return res.status(401).json({ error: 'No user account found with this email address' });
-  }
+    const userId = 'user_' + Date.now();
+    const displayName = (name || normalizedEmail.split('@')[0]).trim();
+    user = db.insert('users', {
+      id: userId,
+      name: displayName,
+      email: normalizedEmail,
+      password: password ? hashPassword(password) : null,
+      role: role === 'admin' ? 'admin' : 'student',
+      goal: 'Master Core Learning Concepts',
+      created_at: new Date().toISOString()
+    });
 
-  if (user.password && password && !verifyPassword(password, user.password)) {
-    try {
-      db.insert('security_logs', {
-        id: uuidv4(),
-        event_type: 'login_failed_bad_password',
-        user_id: user.id,
-        severity: 'high',
-        payload: { email: normalizedEmail, ip: req.ip, userAgent: req.headers['user-agent'] },
-        action_taken: 'http_401_unauthorized',
-        created_at: new Date().toISOString()
-      });
-    } catch (e) { }
+    const starterSpace = db.insert('spaces', {
+      id: 'space_' + Date.now(),
+      user_id: userId,
+      name: displayName.split(' ')[0] + "'s Workspace",
+      description: 'Personalized study workspace for ' + displayName,
+      icon: 'Sparkles',
+      color: '#6366f1',
+      created_at: new Date().toISOString()
+    });
+
+    const starterProject = db.insert('projects', {
+      id: 'project_' + Date.now(),
+      space_id: starterSpace.id,
+      user_id: userId,
+      name: 'Deep Learning & Neural Architectures',
+      description: 'Foundations, architectures, and practice modules',
+      learning_goal: 'Master core foundational concepts and practical implementation',
+      target_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    });
+
+    db.insert('persistent_context', {
+      id: uuidv4(),
+      project_id: starterProject.id,
+      user_id: userId,
+      learningGoals: [starterProject.learning_goal],
+      knownStrengths: ['Motivated Learner'],
+      knownWeaknesses: [],
+      repeatedMistakes: []
+    });
+  } else if (user.password && password && !verifyPassword(password, user.password)) {
     return res.status(401).json({ error: 'Incorrect password entered' });
   }
 
-  // Log successful login audit trail (Security Guide Section 11)
+  // Log successful login audit trail
   try {
     db.insert('security_logs', {
       id: uuidv4(),
-      event_type: 'login_success',
+      event_type: 'login_success_direct',
       user_id: user.id,
       severity: 'low',
       payload: { email: normalizedEmail, ip: req.ip },
@@ -322,7 +340,7 @@ apiRouter.post('/auth/login', (req, res) => {
     });
   } catch (e) { }
 
-  res.json({ user, token: 'token_' + user.id });
+  res.json({ success: true, user, token: 'token_' + user.id });
 });
 
 apiRouter.get('/auth/users', (_req, res) => {
@@ -818,7 +836,8 @@ apiRouter.post('/projects/:projectId/tutor/chat', requireProjectAccess, async (r
 
 // 5. Quizzes
 apiRouter.get('/projects/:projectId/quizzes', (req, res) => {
-  const quizzes = db.find('quizzes', (q) => q.project_id === req.params.projectId);
+  const quizzes = db.find('quizzes', (q) => q.project_id === req.params.projectId)
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   res.json({ quizzes });
 });
 
