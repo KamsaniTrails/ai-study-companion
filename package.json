@@ -20,7 +20,7 @@
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
     "pdf-parse": "^2.4.5",
-    "uuid": "^14.0.2"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
