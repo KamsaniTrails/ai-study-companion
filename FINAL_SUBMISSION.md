@@ -165,4 +165,5 @@ The application fully satisfies the **Security Architecture & Hardening Guide**:
 
 ## Production Deployment: https://ai-study-companion-1-flkl.onrender.com/
 
+## https://ai-study-companion-1-flkl.onrender.com/
 
