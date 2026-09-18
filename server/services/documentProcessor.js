@@ -12,6 +12,9 @@ const db = require('../db');
 const { backgroundQueue } = require('./backgroundQueue');
 const { FaissVectorStore } = require('./faissVectorStore');
 
+const isVercel = Boolean(process.env.VERCEL);
+const stageDelay = (ms) => (isVercel ? Promise.resolve() : new Promise((r) => setTimeout(r, Math.min(ms, 50))));
+
 class DocumentProcessor {
   static init() {
     backgroundQueue.registerHandler('PROCESS_DOCUMENT', async (job) => {
@@ -30,7 +33,7 @@ class DocumentProcessor {
     try {
       // Stage 1: Queued -> OCR / Text Extraction
       updateStage('ocr_extract', 20);
-      await new Promise((r) => setTimeout(r, 350));
+      await stageDelay(350);
 
       let fullText = '';
       let pageTexts = [];
@@ -116,11 +119,11 @@ class DocumentProcessor {
 
       // Stage 2: Content & Structure Extraction
       updateStage('structure', 45);
-      await new Promise((r) => setTimeout(r, 350));
+      await stageDelay(350);
 
       // Stage 3: Knowledge Extraction
       updateStage('knowledge', 70);
-      await new Promise((r) => setTimeout(r, 200));
+      await stageDelay(200);
 
       // Dynamically extract concepts from document text
       let extractedConcepts = [];
@@ -170,7 +173,7 @@ class DocumentProcessor {
 
       // Stage 4: Indexing & Retrieval Representation
       updateStage('indexing', 88);
-      await new Promise((r) => setTimeout(r, 200));
+      await stageDelay(200);
 
       let chunkIndex = 0;
       for (const p of pageTexts) {

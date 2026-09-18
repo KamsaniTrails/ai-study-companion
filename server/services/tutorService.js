@@ -6,6 +6,31 @@ const { SecurityGuard } = require('./securityGuard');
 const { cacheService } = require('./cacheService');
 
 class TutorService {
+  static async ensureProjectChunks(projectId) {
+    const existingChunks = db.find('document_chunks', (c) => c.project_id === projectId);
+    if (!existingChunks || existingChunks.length === 0) {
+      const materials = db.find('materials', (m) => m.project_id === projectId);
+      if (materials && materials.length > 0) {
+        const { DocumentProcessor } = require('./documentProcessor');
+        for (const mat of materials) {
+          try {
+            await DocumentProcessor.process({
+              id: `job_${mat.id}`,
+              data: {
+                materialId: mat.id,
+                projectId: mat.project_id,
+                filePath: mat.file_path,
+                originalName: mat.original_name
+              }
+            });
+          } catch (e) {
+            console.warn('[TutorService] Fallback material process notice:', e.message);
+          }
+        }
+      }
+    }
+  }
+
   static async chat(projectId, conversationId, rawUserMessage, userId = 'user_demo', mode = 'qa') {
     // 1. Security Guard: Scan and neutralize prompt injection
     const securityCheck = SecurityGuard.sanitizeUserQuery(rawUserMessage, userId, projectId);
@@ -46,7 +71,8 @@ class TutorService {
       created_at: new Date().toISOString()
     });
 
-    // 3. Persistent Learning Context Composition
+    // 3. Ensure chunks are ready and compose persistent learning context
+    await TutorService.ensureProjectChunks(projectId);
     const composed = mode === 'revision'
       ? ContextComposer.composeForRevision(projectId, userId, userMessage, convId)
       : ContextComposer.composeForTutor(projectId, userId, userMessage, convId);
@@ -153,6 +179,7 @@ class TutorService {
       created_at: new Date().toISOString()
     });
 
+    await TutorService.ensureProjectChunks(projectId);
     const composed = mode === 'revision'
       ? ContextComposer.composeForRevision(projectId, userId, userMessage, convId)
       : ContextComposer.composeForTutor(projectId, userId, userMessage, convId);

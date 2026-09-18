@@ -21,6 +21,7 @@ const { authenticateUser, requireProjectAccess, requireSpaceAccess } = require('
 const { apiRateLimiter } = require('../middleware/rateLimiter');
 const { cacheService } = require('../services/cacheService');
 const { emailService } = require('../services/emailService');
+const { DocumentProcessor } = require('../services/documentProcessor');
 
 const apiRouter = Router();
 
@@ -652,11 +653,30 @@ apiRouter.get('/projects/:id/dashboard', async (req, res) => {
 });
 
 // 3. Materials & Upload (with Multi-User Isolation & Deletion)
-apiRouter.get('/projects/:projectId/materials', (req, res) => {
+apiRouter.get('/projects/:projectId/materials', async (req, res) => {
   const { projectId } = req.params;
   const { userId, role } = req.query;
 
   let materials = db.find('materials', (m) => m.project_id === projectId);
+
+  // Auto-heal any materials stuck in processing/queued where chunks were not generated
+  for (const mat of materials) {
+    if (mat.status !== 'ready') {
+      const chunks = db.find('document_chunks', (c) => c.material_id === mat.id);
+      if (chunks.length === 0) {
+        try {
+          await DocumentProcessor.process({
+            id: `job_${mat.id}`,
+            data: { materialId: mat.id, projectId: mat.project_id, filePath: mat.file_path, originalName: mat.original_name }
+          });
+        } catch (e) {
+          console.warn('[AutoHeal] Could not auto-process material:', e.message);
+        }
+      }
+    }
+  }
+
+  materials = db.find('materials', (m) => m.project_id === projectId);
 
   // If user is a student, only show materials uploaded by this user (or initial shared demo materials)
   if (role !== 'admin' && userId) {
@@ -666,7 +686,7 @@ apiRouter.get('/projects/:projectId/materials', (req, res) => {
   res.json({ materials });
 });
 
-apiRouter.post('/projects/:projectId/materials/upload', upload.single('file'), (req, res) => {
+apiRouter.post('/projects/:projectId/materials/upload', upload.single('file'), async (req, res) => {
   const { projectId } = req.params;
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'No file uploaded' });
@@ -697,7 +717,15 @@ apiRouter.post('/projects/:projectId/materials/upload', upload.single('file'), (
     `job_${materialId}`
   );
 
-  res.json({ message: 'Queued for ingestion', materialId, jobId: job.id, status: 'queued' });
+  // Process synchronously so that chunks and FAISS vectors are immediately ready
+  try {
+    await DocumentProcessor.process(job);
+    job.status = 'completed';
+  } catch (procErr) {
+    console.error('[Upload] Error processing document:', procErr);
+  }
+
+  res.json({ message: 'Document processed and indexed', materialId, jobId: job.id, status: 'ready' });
 });
 
 // Delete / Remove Material Endpoint
