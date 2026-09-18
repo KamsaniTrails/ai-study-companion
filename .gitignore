@@ -33,3 +33,5 @@ server/data/*.bak
 Thumbs.db
 .vscode/
 .idea/
+
+.vercel

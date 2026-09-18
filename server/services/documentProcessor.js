@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { PDFParse } = require('pdf-parse');
+let PDFParse = null;
+try {
+  const pdfParsePkg = require('pdf-parse');
+  PDFParse = pdfParsePkg.PDFParse || pdfParsePkg;
+} catch (e) {
+  console.warn('[DocumentProcessor] pdf-parse module notice (using resilient text parser fallback):', e.message);
+}
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { backgroundQueue } = require('./backgroundQueue');
