@@ -692,12 +692,12 @@ HTML_CONTENT = """<!DOCTYPE html>
     </div>
 
     <p>
-      Implemented in <code>server/services/tutorService.js</code>, the AI Tutor is an academic mentor strictly constrained to the student's active project workspace.
+      The <strong>Grounded Conversational Tutoring Service</strong> acts as an interactive academic mentor strictly constrained to the student's active project workspace.
     </p>
 
     <h3>Core Operational Directives</h3>
     <ul>
-      <li><strong>Ground Truth Priority:</strong> The Tutor only generates assertions backed by retrieved chunks in <code>&lt;retrieved_evidence_untrusted_data&gt;</code>.</li>
+      <li><strong>Ground Truth Priority:</strong> The Tutor only generates assertions backed by retrieved excerpts in the evidence context.</li>
       <li><strong>Verifiable Citations:</strong> Every factual claim is appended with an inline badge: <code>Source: &lt;Doc_Name&gt; — Page &lt;N&gt;</code>. Clicking this badge opens the inline Document Viewer modal, jumps directly to Page N, and highlights the cited text in amber.</li>
       <li><strong>Zero-Hallucination Refusal Policy:</strong> If query cosine similarity falls below <strong>0.25</strong> or asks out-of-scope questions (e.g. <em>"How do I bake a cake?"</em>), the Tutor refuses: <em>"Based on your uploaded course materials, this topic is not covered in your project notes."</em></li>
     </ul>
@@ -705,7 +705,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <h3>System Prompt Directive &bull; Security Enveloped</h3>
     <div class="code-card">
       <div class="code-badge-bar">
-        <span>SERVICE: tutorService.js</span>
+        <span>DIRECTIVE: GROUNDED ACADEMIC MENTOR</span>
         <span>SECURITY ENVELOPE: XML BOUNDARY ENFORCED</span>
       </div>&lt;system_instructions&gt;
 You are the AI Study Companion Tutor, an expert, patient academic mentor teaching a student in their specific Project workspace.
@@ -741,7 +741,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      To alleviate test anxiety and reinforce weak concepts before evaluation drills, the Product AI provides an automated <strong>Pre-Quiz Revision Mode</strong> (<code>server/services/quizEngine.js</code>). The engine inspects historical mistakes from <code>quiz_attempts</code> and synthesizes a structured refresher:
+      To alleviate test anxiety and reinforce weak concepts before evaluation drills, the Product AI provides an automated <strong>Pre-Quiz Revision Mode</strong> within the Adaptive Assessment Engine. The engine inspects historical student mistakes and synthesizes a structured refresher:
     </p>
 
     <div class="workflow-grid" style="grid-template-columns: repeat(3, 1fr);">
@@ -855,7 +855,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      Naive RAG architectures suffer from context bloat—stuffing entire documents and chat histories into prompt windows, causing attention drift, latency spikes, and high API costs. Implemented in <code>server/services/contextComposer.js</code>, the Product AI enforces a strict <strong>3,500 prompt token budget</strong> prioritizing relevance over volume:
+      Naive RAG architectures suffer from context bloat—stuffing entire documents and chat histories into prompt windows, causing attention drift, latency spikes, and high API costs. The Dynamic Context Orchestration Engine enforces a strict <strong>3,500 prompt token budget</strong> prioritizing relevance over volume:
     </p>
 
     <div class="token-budget-bar-container">
@@ -877,7 +877,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      <strong>Multi-Tenant Database Scoping:</strong> All chunk retrieval queries enforce strict SQL predicates: <code>WHERE project_id = target_project_id AND user_id = authenticated_user_id</code>. Chunks from foreign workspaces are never returned, guaranteeing zero cross-tenant retrieval leakage.
+      <strong>Multi-Tenant Data Scoping:</strong> All chunk retrieval queries enforce strict tenant boundaries: <code>WHERE project_id = target_project_id AND user_id = authenticated_user_id</code>. Chunks from foreign workspaces are never returned, guaranteeing zero cross-tenant retrieval leakage.
     </p>
   </div>
 
@@ -889,7 +889,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      Implemented in <code>server/services/masteryService.js</code>, concept mastery is modeled using a Bayesian-inspired exponential moving average rather than simple score averages:
+      Within the Knowledge Tracing Engine, concept mastery is modeled using a Bayesian-inspired exponential moving average rather than simple score averages:
     </p>
 
     <div class="callout-box">
@@ -949,7 +949,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      Answering the core student question—<em>"What should I do next?"</em>—the recommendation engine synthesizes proactive, page-anchored learning actions:
+      Answering the core student question—<em>"What should I do next?"</em>—the proactive Recommendation Engine synthesizes targeted, page-anchored learning actions:
     </p>
 
     <table>
@@ -988,7 +988,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      Course documents (.pdf, .docx, .md, .txt) uploaded to a Project are processed through an asynchronous 5-stage pipeline managed by <code>server/services/documentProcessor.js</code> and <code>server/services/backgroundQueue.js</code>:
+      Course documents (.pdf, .docx, .md, .txt) uploaded to a Project are processed through an asynchronous 5-stage pipeline managed by the Background Document Ingestion Service and Async Event Queue:
     </p>
 
     <div class="ingestion-pipeline-flow">
@@ -1032,7 +1032,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      Beyond standard chat and quizzes, the platform incorporates two active-recall studios (<code>InnovationsView.jsx</code>):
+      Beyond standard chat and quizzes, the platform incorporates two active-recall studios within the Cognitive Studio workspace:
     </p>
 
     <ul>
@@ -1059,7 +1059,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      The Product AI is hardened against adversarial prompt injection, jailbreaks, and the OWASP Top 10 for LLMs via <code>server/services/securityGuard.js</code>:
+      The Product AI is hardened against adversarial prompt injection, jailbreaks, and the OWASP Top 10 for LLMs via the SecurityGuard Threat Defense Pipeline:
     </p>
 
     <table>
@@ -1103,7 +1103,7 @@ CORE OPERATIONAL RULES:
     </div>
 
     <p>
-      AI quality is continuously measured via the 4-Pillar Evaluation Suite (<code>server/services/evaluationSuite.js</code>):
+      AI quality is continuously measured via the 4-Pillar Evaluation Suite:
     </p>
 
     <div class="workflow-grid">
@@ -1134,7 +1134,7 @@ CORE OPERATIONAL RULES:
       <thead>
         <tr>
           <th style="width: 30%;">Diagnostic Question</th>
-          <th>Automated Programmatic Answer (via <code>GET /api/admin/diagnostics</code>)</th>
+          <th>Automated Programmatic Answer (via Observability &amp; Diagnostic Engine)</th>
         </tr>
       </thead>
       <tbody>
