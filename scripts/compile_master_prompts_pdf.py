@@ -9,13 +9,12 @@ TEMP_DIR = os.environ.get('TEMP', r'C:\Users\jayas\AppData\Local\Temp')
 
 SOURCE_MD = os.path.join(WORKSPACE_ROOT, "PROMPTS.md")
 TARGET_PDF = os.path.join(WORKSPACE_ROOT, "AI_Study_Companion_Development_Prompts.pdf")
-OLD_DUPLICATE_PDF = os.path.join(WORKSPACE_ROOT, "PROMPTS.pdf")
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>AI Study Companion — Development Prompts Master Catalog</title>
+<title>AI Study Companion — Development Prompts Catalog</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
@@ -34,119 +33,113 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: #1e293b;
     background: #ffffff;
-    font-size: 8.6pt;
-    line-height: 1.55;
+    font-size: 8.5pt;
+    line-height: 1.5;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }}
 
-  .executive-banner {{
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
-    color: #ffffff;
-    padding: 22px 24px;
+  /* Professional Light Header Banner - No Dark/Black Background */
+  .clean-header-banner {{
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-top: 5px solid #4f46e5;
+    padding: 18px 20px;
     border-radius: 8px;
-    margin-bottom: 22px;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    margin-bottom: 18px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   }}
 
-  .company-badge-row {{
+  .badge-row {{
     display: flex;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
   }}
 
   .badge-tag {{
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 3px 9px;
-    border-radius: 9999px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    padding: 2px 8px;
+    border-radius: 4px;
     font-size: 7.2pt;
     font-weight: 700;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
-    color: #e0e7ff;
+    color: #3730a3;
   }}
 
   .badge-tag.highlight {{
-    background: #10b981;
-    border-color: #059669;
-    color: #ffffff;
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
   }}
 
   .banner-title {{
-    font-size: 19pt;
+    font-size: 17.5pt;
     font-weight: 800;
-    line-height: 1.2;
-    letter-spacing: -0.4px;
-    margin-bottom: 6px;
+    line-height: 1.25;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
   }}
 
   .banner-subtitle {{
-    font-size: 9.8pt;
-    color: #c7d2fe;
-    font-weight: 500;
-    line-height: 1.4;
+    font-size: 9.3pt;
+    color: #4f46e5;
+    font-weight: 600;
+    line-height: 1.35;
   }}
 
   .banner-meta {{
-    margin-top: 14px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
     display: flex;
     justify-content: space-between;
     font-size: 7.5pt;
-    color: #cbd5e1;
+    color: #64748b;
   }}
 
   h1 {{
-    display: none; /* Replaced by executive banner */
+    display: none; /* Replaced by clean header banner */
   }}
 
   h2 {{
-    font-size: 12.5pt;
+    font-size: 11.5pt;
     font-weight: 700;
     color: #0f172a;
     border-left: 4px solid #4f46e5;
-    padding-left: 10px;
-    margin-top: 22px;
-    margin-bottom: 10px;
+    padding-left: 9px;
+    margin-top: 16px;
+    margin-bottom: 8px;
     page-break-after: avoid;
     letter-spacing: -0.2px;
   }}
 
   h3 {{
-    font-size: 9.8pt;
-    font-weight: 600;
+    font-size: 9.4pt;
+    font-weight: 700;
     color: #1e293b;
-    margin-top: 14px;
-    margin-bottom: 6px;
-    page-break-after: avoid;
-  }}
-
-  h4 {{
-    font-size: 8.8pt;
-    font-weight: 600;
-    color: #334155;
-    margin-top: 10px;
-    margin-bottom: 4px;
+    margin-top: 12px;
+    margin-bottom: 5px;
     page-break-after: avoid;
   }}
 
   p {{
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     color: #334155;
     text-align: justify;
   }}
 
   ul, ol {{
-    margin: 6px 0 10px 18px;
+    margin: 4px 0 8px 18px;
     color: #334155;
   }}
 
   li {{
-    margin-bottom: 4px;
-    line-height: 1.5;
+    margin-bottom: 3px;
+    line-height: 1.45;
   }}
 
   strong {{
@@ -154,21 +147,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-weight: 600;
   }}
 
+  /* Clean Light Prompt Containers - Completely Replaced Dark/Black Boxes */
   pre {{
-    background: #090d16;
-    color: #f8fafc;
-    padding: 12px 14px;
+    background: #f8fafc;
+    color: #0f172a;
+    padding: 10px 12px;
     border-radius: 6px;
-    font-size: 7.4pt;
-    line-height: 1.48;
+    font-size: 7.5pt;
+    line-height: 1.46;
     font-family: 'JetBrains Mono', monospace;
     overflow-x: auto;
-    margin: 8px 0 14px 0;
+    margin: 6px 0 12px 0;
     page-break-inside: avoid;
     white-space: pre-wrap;
     word-break: break-word;
-    border: 1px solid #1e293b;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #4f46e5;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
   }}
 
   code {{
@@ -185,26 +180,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: transparent;
     color: inherit;
     padding: 0;
-    font-size: 7.4pt;
+    font-size: 7.6pt;
     border: none;
-  }}
-
-  blockquote {{
-    border-left: 3.5px solid #4f46e5;
-    background: #eef2ff;
-    padding: 9px 14px;
-    border-radius: 4px;
-    margin: 10px 0 12px 0;
-    color: #1e1b4b;
-    font-size: 8.2pt;
-    line-height: 1.5;
   }}
 
   hr {{
     border: 0;
     height: 1px;
     background: #e2e8f0;
-    margin: 18px 0;
+    margin: 16px 0;
   }}
 
   .footer-notice {{
@@ -220,15 +204,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 
-  <div class="executive-banner">
-    <div class="company-badge-row">
-      <span class="badge-tag highlight">Production Live</span>
+  <div class="clean-header-banner">
+    <div class="badge-row">
+      <span class="badge-tag highlight">Production Verified</span>
       <span class="badge-tag">PRD Section 20.6 Compliant</span>
       <span class="badge-tag">8 Core Disciplines</span>
-      <span class="badge-tag">50/50 Tests Passing</span>
+      <span class="badge-tag">Full Engineering Log</span>
     </div>
     <div class="banner-title">AI Study Companion — Development Prompts Master Catalog</div>
-    <div class="banner-subtitle">Official Engineering Submission &bull; Categorized Engineering Prompts Log Across All 8 Disciplines</div>
+    <div class="banner-subtitle">Official Engineering Submission &bull; Categorized Engineering Prompts Across All 8 Disciplines</div>
     <div class="banner-meta">
       <div><strong>Deployment:</strong> https://ai-study-companion-1-flkl.onrender.com/</div>
       <div><strong>Candidate:</strong> Antigravity Engineering Candidate</div>
@@ -251,18 +235,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 def compile_prompts_pdf():
     print("==================================================================")
-    print(" COMILING DEVELOPMENT PROMPTS MASTER CATALOG PDF ")
+    print(" COMILING CLEAN LIGHT-THEME PROMPTS MASTER PDF ")
     print("==================================================================")
 
-    # 1. Remove duplicate older PDF if it exists
-    if os.path.exists(OLD_DUPLICATE_PDF):
-        try:
-            os.remove(OLD_DUPLICATE_PDF)
-            print(f"[+] Removed redundant duplicate PDF: {OLD_DUPLICATE_PDF}")
-        except Exception as e:
-            print(f"[-] Could not remove old duplicate: {e}")
-
-    # 2. Read Source Markdown
+    # 1. Read Source Markdown
     if not os.path.exists(SOURCE_MD):
         print(f"[-] Source Markdown not found: {SOURCE_MD}")
         return False
@@ -270,7 +246,7 @@ def compile_prompts_pdf():
     with open(SOURCE_MD, 'r', encoding='utf-8') as f:
         md_text = f.read()
 
-    # 3. Parse Markdown
+    # 2. Parse Markdown
     html_content = markdown.markdown(
         md_text,
         extensions=['tables', 'fenced_code', 'nl2br']
@@ -278,13 +254,13 @@ def compile_prompts_pdf():
 
     full_html = HTML_TEMPLATE.format(content_html=html_content)
 
-    temp_html = os.path.join(TEMP_DIR, "master_prompts.html")
-    temp_pdf = os.path.join(TEMP_DIR, "master_prompts.pdf")
+    temp_html = os.path.join(TEMP_DIR, "clean_master_prompts.html")
+    temp_pdf = os.path.join(TEMP_DIR, "clean_master_prompts.pdf")
 
     with open(temp_html, 'w', encoding='utf-8') as f:
         f.write(full_html)
 
-    # 4. Invoke Chrome Headless
+    # 3. Invoke Chrome Headless
     chrome_cmd = [
         CHROME_PATH,
         "--headless=new",
@@ -295,7 +271,7 @@ def compile_prompts_pdf():
         f"file:///{os.path.abspath(temp_html)}"
     ]
 
-    print("[*] Rendering with Chrome Headless...")
+    print("[*] Rendering clean light PDF with Chrome Headless...")
     res = subprocess.run(chrome_cmd, capture_output=True, text=True)
 
     if not os.path.exists(temp_pdf):
@@ -304,7 +280,7 @@ def compile_prompts_pdf():
 
     shutil.copyfile(temp_pdf, TARGET_PDF)
     size_kb = os.path.getsize(TARGET_PDF) / 1024
-    print(f"[+] SUCCESS! Development Prompts Master PDF generated:")
+    print(f"[+] SUCCESS! Clean Light-Theme Prompts PDF generated:")
     print(f"    Path: {TARGET_PDF}")
     print(f"    Size: {size_kb:.1f} KB")
     print("==================================================================")
