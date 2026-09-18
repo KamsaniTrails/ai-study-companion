@@ -5,6 +5,31 @@ class RetrievalEngine {
   static EVIDENCE_THRESHOLD = 0.10;
 
   /**
+   * Reciprocal Rank Fusion (RRF) combining dense vector rank and sparse lexical rank.
+   * Standard Cormack et al. constant k = 60.
+   */
+  static computeRRF(denseRank, sparseRank, k = 60) {
+    const denseComponent = denseRank > 0 ? (1 / (k + denseRank)) : 0;
+    const sparseComponent = sparseRank > 0 ? (1 / (k + sparseRank)) : 0;
+    return denseComponent + sparseComponent;
+  }
+
+  /**
+   * Maximal Marginal Relevance (MMR) text Jaccard overlap to prevent redundant chunks.
+   */
+  static computeOverlap(textA, textB) {
+    if (!textA || !textB) return 0;
+    const setA = new Set(textA.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
+    const setB = new Set(textB.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
+    if (setA.size === 0 || setB.size === 0) return 0;
+    let intersection = 0;
+    for (const w of setA) {
+      if (setB.has(w)) intersection++;
+    }
+    return intersection / Math.min(setA.size, setB.size);
+  }
+
+  /**
    * Search chunks strictly within project_id with FAISS vector similarity + lexical hybrid matching.
    */
   static search(projectId, query, topK = 3) {
@@ -207,27 +232,75 @@ class RetrievalEngine {
       // Pull dense vector distance from FAISS
       const faissScore = faissScoreMap.get(chunk.id) || 0;
 
-      // Hybrid combination: Take the best of semantic + lexical
-      const combinedScore = (faissScore * 0.50) + (lexicalScore * 0.50);
-      const finalScore = parseFloat(Math.min(1.0, Math.max(combinedScore, faissScore, lexicalScore)).toFixed(3));
-
       return {
         id: chunk.id,
         materialId: chunk.material_id,
         materialName: mat.original_name,
         pageNumber: chunk.page_number,
         content: chunk.content,
-        relevanceScore: finalScore,
         faissScore,
         lexicalScore: parseFloat(lexicalScore.toFixed(3)),
         vectorEngine: 'FAISS'
       };
     });
 
-    const filtered = scoredChunks
+    // 4. Compute Dense Ranks and Sparse Ranks for Reciprocal Rank Fusion (RRF)
+    const denseRankMap = new Map();
+    [...scoredChunks]
+      .filter((c) => c.faissScore > 0.10)
+      .sort((a, b) => b.faissScore - a.faissScore)
+      .forEach((c, idx) => denseRankMap.set(c.id, idx + 1));
+
+    const sparseRankMap = new Map();
+    [...scoredChunks]
+      .filter((c) => c.lexicalScore > 0)
+      .sort((a, b) => b.lexicalScore - a.lexicalScore)
+      .forEach((c, idx) => sparseRankMap.set(c.id, idx + 1));
+
+    // Combine using RRF + Normalized Hybrid blend
+    const maxPossibleRrf = 2 / 61;
+    const rrfScoredChunks = scoredChunks.map((chunk) => {
+      const denseRank = denseRankMap.get(chunk.id) || 0;
+      const sparseRank = sparseRankMap.get(chunk.id) || 0;
+      const rrfScore = RetrievalEngine.computeRRF(denseRank, sparseRank, 60);
+
+      const normalizedRrf = rrfScore > 0 ? Math.min(1.0, rrfScore / maxPossibleRrf) : 0;
+      const baseHybrid = (chunk.faissScore * 0.50) + (chunk.lexicalScore * 0.50);
+      const finalScore = parseFloat(Math.min(1.0, Math.max(baseHybrid, (normalizedRrf * 0.70) + (baseHybrid * 0.30))).toFixed(3));
+
+      return {
+        ...chunk,
+        relevanceScore: finalScore,
+        rrfScore: parseFloat(rrfScore.toFixed(5)),
+        denseRank,
+        sparseRank,
+        retrievalStrategy: 'Hybrid_RRF_MMR'
+      };
+    });
+
+    // 5. Maximal Marginal Relevance (MMR) & Diversity Filtering
+    const sorted = rrfScoredChunks
       .filter((c) => c.relevanceScore > 0)
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, topK);
+      .sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+    const filtered = [];
+    for (const candidate of sorted) {
+      if (filtered.length >= topK) break;
+      const isRedundant = filtered.some((sel) => RetrievalEngine.computeOverlap(sel.content, candidate.content) > 0.85);
+      if (!isRedundant || filtered.length === 0) {
+        filtered.push(candidate);
+      }
+    }
+
+    // Fill remaining slots if diversity was overly strict
+    if (filtered.length < topK && sorted.length > filtered.length) {
+      for (const candidate of sorted) {
+        if (filtered.length >= topK) break;
+        if (!filtered.some((f) => f.id === candidate.id)) {
+          filtered.push(candidate);
+        }
+      }
+    }
 
     const topScore = filtered.length > 0 ? filtered[0].relevanceScore : 0;
     const hasSufficientEvidence = topScore >= this.EVIDENCE_THRESHOLD &&

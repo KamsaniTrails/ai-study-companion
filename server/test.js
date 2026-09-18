@@ -372,6 +372,35 @@ async function run() {
   assert(bench.summary.status === 'ALL_BENCHMARKS_PASSING', 'Overall evaluation status marked ALL_BENCHMARKS_PASSING');
   assert(bench.summary.avgTotalLatencyMs > 0, `Measured empirical latency recorded (${bench.summary.avgTotalLatencyMs}ms)`);
 
+  console.log('\n[15. Hybrid RRF (Reciprocal Rank Fusion) & MMR Diversity Retrieval]');
+  // 1. RRF Formula Verification
+  const rrfTop = RetrievalEngine.computeRRF(1, 1, 60);
+  assert(Math.abs(rrfTop - (2 / 61)) < 0.0001, 'RRF top rank computes exact Cormack constant 2/61');
+  const rrfAsymmetric = RetrievalEngine.computeRRF(1, 0, 60);
+  assert(Math.abs(rrfAsymmetric - (1 / 61)) < 0.0001, 'RRF zero sparse match isolates dense component 1/61');
+
+  // 2. MMR Overlap Detection
+  const identicalOverlap = RetrievalEngine.computeOverlap(
+    'Scaled Dot-Product Attention computes queries, keys, and values.',
+    'Scaled Dot-Product Attention computes queries, keys, and values.'
+  );
+  assert(identicalOverlap >= 0.95, 'MMR overlap correctly flags identical text (> 95%)');
+
+  const distinctOverlap = RetrievalEngine.computeOverlap(
+    'Gradient descent optimization backpropagation algorithm convergence.',
+    'Residual skip connections prevent vanishing gradients in deep layers.'
+  );
+  assert(distinctOverlap < 0.50, 'MMR overlap recognizes distinct thematic content (< 50%)');
+
+  // 3. Retrieval Engine RRF Telemetry Output
+  const rrfSearch = RetrievalEngine.search('project_transformers', 'Why divide by sqrt(d_k)?', 3);
+  assert(rrfSearch.hasSufficientEvidence === true, 'RRF search retrieves verified evidence');
+  assert(rrfSearch.topChunks.length > 0, 'RRF search populates topChunks');
+  assert(rrfSearch.topChunks[0].retrievalStrategy === 'Hybrid_RRF_MMR', 'Top chunk tagged with Hybrid_RRF_MMR strategy');
+  assert(rrfSearch.topChunks[0].denseRank === 1, 'Top chunk identifies Dense Rank 1');
+  assert(rrfSearch.topChunks[0].sparseRank === 1, 'Top chunk identifies Sparse Rank 1');
+  assert(rrfSearch.topChunks[0].rrfScore > 0, 'Top chunk contains calculated RRF score');
+
   console.log('\n=======================================================');
   console.log(` SUMMARY: ${passed} / ${total} TESTS PASSED`);
   console.log('=======================================================\n');
