@@ -1,4 +1,15 @@
-<!DOCTYPE html>
+import os
+import subprocess
+import shutil
+
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+TEMP_DIR = os.environ.get('TEMP', r'C:\Users\jayas\AppData\Local\Temp')
+TARGET_PDF = os.path.join(WORKSPACE_ROOT, "AI_Study_Companion_System_Architecture.pdf")
+HTML_FILE = os.path.join(WORKSPACE_ROOT, "docs", "architecture_pdf_template.html")
+TEMP_PDF = os.path.join(TEMP_DIR, "executive_system_architecture.pdf")
+
+HTML_CONTENT = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1365,3 +1376,43 @@
 
 </body>
 </html>
+"""
+
+def compile_architecture_pdf():
+    print("==================================================================")
+    print(" COMPILING CLEAN EXECUTIVE SYSTEM ARCHITECTURE PDF (NO CLAUDE/URL)")
+    print("==================================================================")
+
+    # 1. Update source HTML file
+    with open(HTML_FILE, 'w', encoding='utf-8') as f:
+        f.write(HTML_CONTENT)
+    print(f"[+] Updated source HTML at: {HTML_FILE}")
+
+    # 2. Invoke Chrome Headless
+    chrome_cmd = [
+        CHROME_PATH,
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-gpu",
+        f"--print-to-pdf={TEMP_PDF}",
+        "--no-pdf-header-footer",
+        f"file:///{os.path.abspath(HTML_FILE)}"
+    ]
+
+    print("[*] Rendering with Chrome Headless...")
+    res = subprocess.run(chrome_cmd, capture_output=True, text=True)
+
+    if not os.path.exists(TEMP_PDF):
+        print(f"[-] Failed to generate PDF: {res.stderr}")
+        return False
+
+    shutil.copyfile(TEMP_PDF, TARGET_PDF)
+    size_kb = os.path.getsize(TARGET_PDF) / 1024
+    print(f"[+] SUCCESS! Clean System Architecture PDF generated:")
+    print(f"    Target: {TARGET_PDF}")
+    print(f"    Size: {size_kb:.1f} KB")
+    print("==================================================================")
+    return True
+
+if __name__ == "__main__":
+    compile_architecture_pdf()

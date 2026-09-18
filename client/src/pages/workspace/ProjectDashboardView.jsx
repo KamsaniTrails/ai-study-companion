@@ -185,10 +185,10 @@ export const ProjectDashboardView = ({ projectId, onSelectTab, currentUser }) =>
           <span style={{ fontSize: 11, textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em' }}>
             Average Mastery
           </span>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#059669' }}>
-            {stats.averageMastery || 75}%
+          <div style={{ fontSize: 22, fontWeight: 700, color: (stats.quizzesCompleted > 0 && stats.averageMastery > 0) ? '#059669' : '#64748b' }}>
+            {stats.quizzesCompleted > 0 ? `${stats.averageMastery || 0}%` : '0% (Not Assessed)'}
           </div>
-          <span style={{ fontSize: 11, color: '#64748b' }}>Across all tracked concepts</span>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Across all tested concepts</span>
         </div>
 
         <div className="card-pro" style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>

@@ -209,21 +209,27 @@ HTML_CONTENT = """<!DOCTYPE html>
     line-height: 1.4;
   }
 
-  .cover-footer {
-    border-top: 1px solid #e2e8f0;
-    padding-top: 18px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    font-size: 7.6pt;
-    color: #64748b;
+  .cover-scope-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #4f46e5;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   }
 
-  .cover-meta-item strong {
-    display: block;
+  .scope-card-title {
+    font-size: 8.6pt;
+    font-weight: 700;
     color: #0f172a;
-    font-size: 8.2pt;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
+  }
+
+  .scope-card-text {
+    font-size: 7.8pt;
+    color: #475569;
+    line-height: 1.45;
   }
 
   /* ==========================================================================
@@ -576,21 +582,6 @@ HTML_CONTENT = """<!DOCTYPE html>
         A comprehensive technical and functional specification of runtime AI capabilities—integrating document-grounded RAG, adaptive spaced assessment, 5-point qualitative rubric grading, and cognitive science pedagogy.
       </p>
 
-      <div class="cover-pills-row">
-        <div class="cover-pill green">
-          <span style="font-size:10pt;">&bull;</span> Production Live: OnRender Cloud
-        </div>
-        <div class="cover-pill indigo">
-          <span style="font-size:10pt;">&bull;</span> PRD Sections 7, 8, 9, 10, 14 &amp; 15 Fully Compliant
-        </div>
-        <div class="cover-pill">
-          <span style="font-size:10pt;">&bull;</span> Multi-Model Tiering: Gemini Pro + Flash + Simulator
-        </div>
-        <div class="cover-pill green">
-          <span style="font-size:10pt;">&bull;</span> 50 / 50 Passing Automated Tests
-        </div>
-      </div>
-
       <div class="cover-grid">
         <div class="cover-feature-card">
           <div class="feature-card-title">1. Grounded RAG &amp; Verifiable Citations</div>
@@ -614,18 +605,10 @@ HTML_CONTENT = """<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="cover-footer">
-      <div class="cover-meta-item">
-        <strong>Public Deployment</strong>
-        https://ai-study-companion-1-flkl.onrender.com/
-      </div>
-      <div class="cover-meta-item">
-        <strong>Evaluation Standard</strong>
-        4-Pillar Continuous Benchmarks (100% Pass)
-      </div>
-      <div class="cover-meta-item">
-        <strong>Document Status</strong>
-        v1.0.0 Production Official Release
+    <div class="cover-scope-card">
+      <div class="scope-card-title">Specification Scope &amp; Evaluation Benchmark</div>
+      <div class="scope-card-text">
+        This document provides the official technical specification for runtime artificial intelligence models, retrieval-augmented generation pipelines, cognitive evaluation rubrics, and automated health safeguards in the AI Study Companion, fulfilling <strong>PRD Sections 7, 8, 9, 10, 14 &amp; 15</strong>.
       </div>
     </div>
   </div>
@@ -660,7 +643,7 @@ HTML_CONTENT = """<!DOCTYPE html>
       <div class="workflow-step-card">
         <span class="workflow-step-badge">STAGE 1</span>
         <div class="workflow-step-title">Multimodal Ingestion</div>
-        <div class="workflow-step-desc">Extracts text, formulas, headings, and page boundaries into project-scoped 768-dim embeddings.</div>
+        <div class="workflow-step-desc">Extracts text, formulas, headings, and page boundaries into project-scoped 128-dim subword feature vectors.</div>
       </div>
       <div class="workflow-step-card">
         <span class="workflow-step-badge">STAGE 2</span>
@@ -680,7 +663,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     </div>
 
     <div class="callout-box success">
-      <strong>Live Health Status &bull; HTTP 200 OK:</strong> Verified at <code>https://ai-study-companion-1-flkl.onrender.com/health</code>. The service maintains dual-tier cloud LLM orchestration (Gemini 2.0/1.5 Pro and Gemini Flash) with an automated circuit-breaker fallback to an offline deterministic neural simulator, ensuring 100% demo and runtime availability.
+      <strong>Service Health &amp; Availability:</strong> The platform maintains dual-tier cloud LLM orchestration (Gemini 2.0/1.5 Pro and Gemini Flash) with an automated circuit-breaker fallback to an offline deterministic neural simulator, ensuring 100% demo and runtime availability.
     </div>
   </div>
 
@@ -1015,7 +998,7 @@ CORE OPERATIONAL RULES:
       <div class="pipeline-card">
         <div class="pipeline-num">STAGE 5</div>
         <div class="pipeline-title">Vector Ready</div>
-        <div class="pipeline-desc">Generates 768-dim dense embeddings stored in the project-scoped vector index.</div>
+        <div class="pipeline-desc">Generates 128-dim dense subword feature vectors stored in the project-scoped vector index.</div>
       </div>
     </div>
 

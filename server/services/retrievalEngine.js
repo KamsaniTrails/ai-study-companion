@@ -230,7 +230,8 @@ class RetrievalEngine {
       .slice(0, topK);
 
     const topScore = filtered.length > 0 ? filtered[0].relevanceScore : 0;
-    const hasSufficientEvidence = topScore >= this.EVIDENCE_THRESHOLD;
+    const hasSufficientEvidence = topScore >= this.EVIDENCE_THRESHOLD &&
+      (filtered[0]?.lexicalScore > 0 || filtered[0]?.faissScore >= 0.65);
 
     const citations = hasSufficientEvidence
       ? filtered.map((c) => {
@@ -249,7 +250,8 @@ class RetrievalEngine {
     return {
       hasSufficientEvidence,
       citations,
-      topChunks: filtered
+      topChunks: hasSufficientEvidence ? filtered : [],
+      reason: hasSufficientEvidence ? undefined : 'INSUFFICIENT_EVIDENCE'
     };
   }
 }

@@ -49,18 +49,52 @@ class QuizEngine {
         chunks,
         documentContext,
         difficulty,
-        prompt: `Generate 2 adaptive practice questions (1 Multiple Choice Question 'mcq', 1 Open-Ended Question 'open_ended') strictly grounded in the provided document materials and concepts.
+        prompt: `You are an academic assessment engine. Generate 2 practice questions (1 'mcq' and 1 'open_ended') strictly grounded in the provided document excerpts.
+
 Target Concepts: ${targetConcepts.map((c) => c.concept_name).join(', ')}
-${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' + (project?.name || 'Study Project')}`
+${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' + (project?.name || 'Study Project')}
+
+STRICT GROUNDING REQUIREMENTS:
+- Every question, correct answer, and distractor MUST come directly from the provided text excerpts.
+- Do NOT introduce concepts, terms, or vocabulary not present in the excerpts.
+- For MCQ: provide 4 options where 1 is the verified statement and 3 are plausible distractors also using excerpt vocabulary.
+- Return ONLY a JSON array with exactly 2 questions:
+[
+  {
+    "type": "mcq",
+    "prompt": "Question text...",
+    "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+    "correctAnswer": "Exact string of correct option",
+    "explanation": "Why this is correct citing the material...",
+    "difficulty": "${difficulty}",
+    "conceptName": "${targetConcepts[0]?.concept_name || 'Core Concept'}"
+  },
+  {
+    "type": "open_ended",
+    "prompt": "Explain the operational mechanism of...",
+    "options": null,
+    "correctAnswer": "Detailed model solution explaining the mechanism...",
+    "explanation": "Key rubric grading points...",
+    "difficulty": "${difficulty}",
+    "conceptName": "${targetConcepts[1]?.concept_name || targetConcepts[0]?.concept_name || 'Core Concept'}"
+  }
+]`
       });
 
-      if (Array.isArray(res.data) && res.data.length >= 2 && res.data[0].prompt && res.data[1].prompt) {
-        generatedQuestions = res.data.slice(0, 2);
+      let questionsList = [];
+      if (Array.isArray(res.data)) {
+        questionsList = res.data;
+      } else if (res.data && Array.isArray(res.data.questions)) {
+        questionsList = res.data.questions;
+      }
+
+      if (questionsList.length >= 2 && questionsList[0].prompt && questionsList[1].prompt) {
+        generatedQuestions = questionsList.slice(0, 2);
       } else {
         throw new Error('Incomplete question structure from AI provider');
       }
     } catch (e) {
-      // Intelligent fallback grounded in the project's actual materials and concepts
+      // Intelligent fallback strictly grounded in the project's actual document chunks
       generatedQuestions = QuizEngine.synthesizeDocumentQuestions(projectId, targetConcepts, chunks, materials, difficulty);
     }
 
@@ -290,7 +324,7 @@ ${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' 
   }
 
   static synthesizeDocumentQuestions(projectId, targetConcepts = [], chunks = [], materials = [], difficulty = 'intermediate') {
-    // 1. Check if the project is transformers or explicitly discusses attention/residual connections
+    // 1. Transformer-specific verified reference questions
     const isTransformer = projectId === 'project_transformers' ||
       chunks.some((c) => (c.content || '').toLowerCase().includes('scaled dot-product') || (c.content || '').toLowerCase().includes('residual block'));
 
@@ -307,7 +341,8 @@ ${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' 
           ],
           correctAnswer: 'To prevent variance inflation from pushing softmax into regions with vanishing gradients',
           explanation: 'Scaling normalizes variance to 1, preventing softmax saturation.',
-          difficulty
+          difficulty,
+          conceptName: 'Scaled Dot-Product Attention'
         },
         {
           type: 'open_ended',
@@ -315,12 +350,13 @@ ${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' 
           options: null,
           correctAnswer: 'During backpropagation, dH/dx = dF/dx + 1. The constant +1 identity term ensures gradients flow directly without vanishing.',
           explanation: 'The additive identity term prevents vanishing gradients.',
-          difficulty
+          difficulty,
+          conceptName: 'Residual Connections'
         }
       ];
     }
 
-    // 2. Extract facts and sentences from uploaded document chunks
+    // 2. Pure Document-Grounded Synthesis for ANY uploaded subject (Unix, Biology, Law, Physics, etc.)
     const cleanSentences = [];
     for (const chunk of chunks) {
       if (!chunk.content) continue;
@@ -328,75 +364,72 @@ ${documentContext ? 'Course Material Chunks:\n' + documentContext : 'Project: ' 
         .replace(/\[Source:[^\]]+\]/g, '')
         .split(/(?<=[.?!])\s+|\n+/)
         .map((s) => s.trim())
-        .filter((s) => s.length >= 30 && s.length <= 250 && !s.startsWith('#') && !s.startsWith('*') && !s.startsWith('-'));
+        .filter((s) => s.length >= 25 && s.length <= 200 && !s.startsWith('#') && !s.startsWith('*') && !s.startsWith('-'));
       cleanSentences.push(...rawLines);
     }
 
     const docName = materials[0]?.original_name?.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ') || 'Course Notes';
     const c1Name = targetConcepts[0]?.concept_name || `${docName} Fundamentals`;
-    const c2Name = targetConcepts[1]?.concept_name || `${docName} Core Mechanisms`;
+    const c2Name = targetConcepts[1]?.concept_name || `${docName} Operational Rules`;
 
-    // Candidate sentence for Concept 1 (Definitions / Foundations)
-    let fact1 = cleanSentences.find((s) => {
+    // Extract target sentences related to concept 1
+    const c1Keywords = c1Name.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    let matchedSentences = cleanSentences.filter((s) => {
       const lower = s.toLowerCase();
-      return (
-        lower.includes('built on') ||
-        lower.includes('is a') ||
-        lower.includes('platform') ||
-        lower.includes('interface') ||
-        lower.includes('enables') ||
-        lower.includes('foundation') ||
-        lower.includes('operates') ||
-        lower.includes('system') ||
-        lower.includes('qr') ||
-        lower.includes('upi')
-      );
-    }) || cleanSentences[0] || `${docName} establishes foundational mechanisms for operational reliability and user interactions.`;
+      return c1Keywords.some((k) => lower.includes(k));
+    });
 
+    const fact1 = matchedSentences[0] || cleanSentences[0] || `The study material defines key foundational principles and specifications for ${c1Name}.`;
     const correctOption1 = fact1.endsWith('.') ? fact1.slice(0, -1) : fact1;
 
-    // Distractors tailored to academic exam options
-    const distractors = [
-      `It relies on a closed-loop offline token architecture that bypasses synchronized network verification.`,
-      `It replaces institutional clearing rails by holding all client transactions in proprietary physical vaults.`,
-      `It restricts operational execution exclusively to manual asynchronous batch processing without digital validation.`
-    ];
+    // Build distractors strictly from OTHER sentences of the same document (cross-chunk distractors)
+    const otherSentences = cleanSentences.filter((s) => s !== fact1);
+    let distractors = [];
 
+    if (otherSentences.length >= 3) {
+      // Use real contrasting sentences from different sections of the user's uploaded document
+      distractors = [
+        otherSentences[0].endsWith('.') ? otherSentences[0].slice(0, -1) : otherSentences[0],
+        otherSentences[1].endsWith('.') ? otherSentences[1].slice(0, -1) : otherSentences[1],
+        otherSentences[2].endsWith('.') ? otherSentences[2].slice(0, -1) : otherSentences[2]
+      ];
+    } else {
+      // Synthesize plausible grammatical distractors by altering the factual statement
+      distractors = [
+        `It bypasses direct parameter verification and relies strictly on unindexed sequential scanning.`,
+        `It restricts execution exclusively to transient volatile memory without persistent disk state.`,
+        `It executes as an isolated single-pass pipeline without validating dependent operational constraints.`
+      ];
+    }
+
+    // Shuffle options
     const options1 = [correctOption1, ...distractors].sort(() => 0.5 - Math.random());
 
-    // Candidate sentence/mechanism for Concept 2 (Mechanisms / Operations)
-    let fact2 = cleanSentences.find((s) => {
+    // Sentence for Concept 2 (Open-ended mechanism)
+    const c2Keywords = c2Name.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    let matchedC2 = cleanSentences.filter((s) => {
       const lower = s.toLowerCase();
-      return s !== fact1 && (
-        lower.includes('connects') ||
-        lower.includes('ecosystem') ||
-        lower.includes('process') ||
-        lower.includes('partners') ||
-        lower.includes('transactions') ||
-        lower.includes('qr') ||
-        lower.includes('upi') ||
-        lower.includes('mechanism') ||
-        lower.includes('settlement') ||
-        lower.includes('rail')
-      );
-    }) || cleanSentences[1] || `The system orchestrates transactions and data flow across distributed participants through secure interoperable channels.`;
+      return s !== fact1 && c2Keywords.some((k) => lower.includes(k));
+    });
+
+    const fact2 = matchedC2[0] || otherSentences[3] || cleanSentences[1] || `The document specifies operational rules and functional dependencies for ${c2Name}.`;
 
     return [
       {
         type: 'mcq',
-        prompt: `Based on your course materials in ${materials[0]?.original_name || docName} for **${c1Name}**, which of the following statements accurately describes its core foundation and architecture?`,
+        prompt: `Based on your course materials in ${materials[0]?.original_name || docName} regarding **${c1Name}**, which of the following statements is verified as accurate?`,
         options: options1,
         correctAnswer: correctOption1,
-        explanation: `According to your study materials for ${c1Name}, "${correctOption1}" represents the verified foundational operational mechanism.`,
+        explanation: `According to your study notes, "${correctOption1}" is the documented technical specification.`,
         difficulty,
         conceptName: c1Name
       },
       {
         type: 'open_ended',
-        prompt: `Based on your course materials for **${c2Name}**, explain how the platform coordinates participants, interfaces, and transaction flow end-to-end.`,
+        prompt: `Based on your uploaded course materials for **${c2Name}**, explain its operational mechanism, primary syntax or structure, and functional purpose.`,
         options: null,
-        correctAnswer: `${fact2} It connects users, merchant interfaces, and partner institutions through standardized digital rails to achieve real-time verification and settlement without manual friction.`,
-        explanation: `A full-credit rubric response must explain: 1) The participant connections and digital interfaces, 2) The underlying operational rail, and 3) The verification and settlement flow.`,
+        correctAnswer: `${fact2} Review the corresponding sections in your course notes for the complete technical rules and usage.`,
+        explanation: `A full-credit rubric response must explain: 1) The core mechanism of ${c2Name}, 2) Its operational constraints as documented, and 3) Practical application.`,
         difficulty,
         conceptName: c2Name
       }

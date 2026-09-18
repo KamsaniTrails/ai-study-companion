@@ -2,13 +2,33 @@ const fs = require('fs');
 const path = require('path');
 const { MongoClient } = require('mongodb');
 
-const dataDir = path.resolve(__dirname, 'data');
+const isVercel = Boolean(process.env.VERCEL);
+const originalDataDir = path.resolve(__dirname, 'data');
+const originalDbFile = path.join(originalDataDir, 'db.json');
+
+const dataDir = isVercel
+  ? path.join('/tmp', 'data')
+  : originalDataDir;
+
 const dbFilePath = path.join(dataDir, 'db.json');
 const backupFilePath = path.join(dataDir, 'db.json.bak');
 const tempFilePath = path.join(dataDir, 'db.json.tmp');
 
 if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+  } catch (e) {
+    console.warn('[DB] Could not create data directory:', e.message);
+  }
+}
+
+// In Vercel serverless, copy bundled seed db.json to /tmp/data/db.json if not present
+if (isVercel && !fs.existsSync(dbFilePath) && fs.existsSync(originalDbFile)) {
+  try {
+    fs.copyFileSync(originalDbFile, dbFilePath);
+  } catch (e) {
+    console.warn('[DB] Could not copy seed db.json to /tmp:', e.message);
+  }
 }
 
 // Default initial state
@@ -76,7 +96,11 @@ function saveDb(data) {
     }
     fs.renameSync(tempFilePath, dbFilePath);
   } catch (err) {
-    fs.writeFileSync(dbFilePath, json, 'utf8');
+    try {
+      fs.writeFileSync(dbFilePath, json, 'utf8');
+    } catch (writeErr) {
+      console.warn('[DB] Disk write skipped (ephemeral memory cached):', writeErr.message);
+    }
   }
 }
 

@@ -27,9 +27,17 @@ const apiRouter = Router();
 apiRouter.use(authenticateUser); // checks user identity and permissions
 apiRouter.use(apiRateLimiter.middleware()); //limit requests
 
-const uploadDir = path.resolve(__dirname, '../../uploads');
+const isVercel = Boolean(process.env.VERCEL);
+const uploadDir = isVercel
+  ? path.join('/tmp', 'uploads')
+  : path.resolve(__dirname, '../../uploads');
+
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (e) {
+    console.warn('[Storage] Could not create upload directory:', e.message);
+  }
 }
 
 const storage = multer.diskStorage({
@@ -420,15 +428,17 @@ apiRouter.get('/spaces/:id/dashboard', (req, res) => {
   const projectIds = new Set(projects.map((p) => p.id));
 
   const spaceMasteries = masteries.filter((m) => projectIds.has(m.project_id));
-  const avgMastery = spaceMasteries.length > 0
-    ? Math.round(spaceMasteries.reduce((a, b) => a + b.mastery_score, 0) / spaceMasteries.length)
-    : 75;
+  const testedSpaceMasteries = spaceMasteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+  const avgMastery = testedSpaceMasteries.length > 0
+    ? Math.round(testedSpaceMasteries.reduce((a, b) => a + b.mastery_score, 0) / testedSpaceMasteries.length)
+    : 0;
 
   const enrichedProjects = projects.map((p) => {
     const pMasteries = masteries.filter((m) => m.project_id === p.id);
-    const pAvg = pMasteries.length > 0
-      ? Math.round(pMasteries.reduce((a, b) => a + b.mastery_score, 0) / pMasteries.length)
-      : 75;
+    const testedPMasteries = pMasteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+    const pAvg = testedPMasteries.length > 0
+      ? Math.round(testedPMasteries.reduce((a, b) => a + b.mastery_score, 0) / testedPMasteries.length)
+      : (p.average_mastery || 0);
     return {
       ...p,
       material_count: materials.filter((m) => m.project_id === p.id).length,
@@ -514,7 +524,10 @@ apiRouter.get('/projects', (req, res) => {
   const enriched = projs.map((p) => {
     const space = spaces.find((s) => s.id === p.space_id);
     const pMasteries = masteries.filter((m) => m.project_id === p.id);
-    const avg = pMasteries.length > 0 ? Math.round(pMasteries.reduce((a, b) => a + b.mastery_score, 0) / pMasteries.length) : 75;
+    const testedPMasteries = pMasteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+    const avg = testedPMasteries.length > 0
+      ? Math.round(testedPMasteries.reduce((a, b) => a + b.mastery_score, 0) / testedPMasteries.length)
+      : (p.average_mastery || 0);
 
     return {
       ...p,
@@ -933,9 +946,10 @@ apiRouter.get('/admin/users/:id/journey', (req, res) => {
 
   const totalTokens = aiLogs.reduce((acc, l) => acc + (l.tokens_prompt || 0) + (l.tokens_completion || 0), 0);
   const totalCost = aiLogs.reduce((acc, l) => acc + (l.estimated_cost || 0), 0);
-  const avgMastery = masteries.length > 0
-    ? Math.round(masteries.reduce((acc, m) => acc + m.mastery_score, 0) / masteries.length)
-    : 75;
+  const testedMasteries = masteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+  const avgMastery = testedMasteries.length > 0
+    ? Math.round(testedMasteries.reduce((acc, m) => acc + m.mastery_score, 0) / testedMasteries.length)
+    : 0;
 
   res.json({
     user,

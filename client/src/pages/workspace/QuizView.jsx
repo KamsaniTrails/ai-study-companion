@@ -99,6 +99,7 @@ export const QuizView = ({ projectId }) => {
       const evalData = await res.json();
       setResult(evalData);
       await fetchQuizzes();
+      window.dispatchEvent(new CustomEvent('quiz_submitted', { detail: { projectId, evalData } }));
     } catch (err) {
       console.error('Quiz submit failed:', err);
     } finally {

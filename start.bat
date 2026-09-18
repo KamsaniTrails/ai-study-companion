@@ -2,7 +2,7 @@
 title AI Study Companion - Launcher
 echo ========================================================
 echo  AI Study Companion - Launching Full Stack Application
-echo  - Model: Gemini 3.1
+echo  - Model: Google Gemini 1.5 Pro / Flash
 echo  - Frontend: React + JavaScript
 echo  - Location: %~dp0
 echo ========================================================

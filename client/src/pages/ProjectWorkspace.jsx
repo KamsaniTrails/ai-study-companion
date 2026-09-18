@@ -32,6 +32,32 @@ export const ProjectWorkspace = ({
   currentUser
 }) => {
   const [internalTab, setInternalTab] = useState(externalTab || initialTab || 'dashboard');
+  const [currentProject, setCurrentProject] = useState(project);
+
+  React.useEffect(() => {
+    setCurrentProject(project);
+  }, [project]);
+
+  React.useEffect(() => {
+    const handleQuizSubmitted = async (e) => {
+      if (e.detail?.projectId === project.id) {
+        try {
+          const res = await fetch(`/api/projects/${project.id}/dashboard`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.project) {
+              setCurrentProject((prev) => ({
+                ...prev,
+                average_mastery: data.stats?.averageMastery ?? prev.average_mastery
+              }));
+            }
+          }
+        } catch (err) {}
+      }
+    };
+    window.addEventListener('quiz_submitted', handleQuizSubmitted);
+    return () => window.removeEventListener('quiz_submitted', handleQuizSubmitted);
+  }, [project.id]);
 
   React.useEffect(() => {
     if (externalTab) {
@@ -125,8 +151,8 @@ export const ProjectWorkspace = ({
                 <span style={{ fontSize: 10, textTransform: 'uppercase', color: '#64748b', fontWeight: 600, letterSpacing: '0.04em' }}>
                   Project Mastery
                 </span>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#059669', lineHeight: 1.2 }}>
-                  {project.average_mastery || 75}%
+                <div style={{ fontSize: 20, fontWeight: 700, color: (currentProject.average_mastery && currentProject.average_mastery > 0) ? '#059669' : '#64748b', lineHeight: 1.2 }}>
+                  {currentProject.average_mastery !== undefined && currentProject.average_mastery > 0 ? `${currentProject.average_mastery}%` : '0%'}
                 </div>
               </div>
             </div>

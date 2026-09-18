@@ -7,19 +7,37 @@ class MasteryService {
     const cId = concept ? concept.id : (conceptId || `c_${Date.now()}`);
     const cName = concept ? concept.name : (conceptName || 'Core Concept');
 
+    if (!concept) {
+      db.insert('concepts', {
+        id: cId,
+        project_id: projectId,
+        name: cName,
+        description: `Core concept in ${projectId}`,
+        category: 'Course Topics',
+        importance_score: 8.0
+      });
+    }
+
     let mastery = db.findOne('concept_mastery', (m) => m.project_id === projectId && (m.concept_id === cId || m.concept_name === cName));
     const todayStr = new Date().toISOString().split('T')[0];
-    let currentScore = mastery ? mastery.mastery_score : 50;
     let history = mastery ? (mastery.history ? [...mastery.history] : []) : [];
 
-    // Weighted update: 70% prior estimate + 30% new evidence (PRD Section 10)
-    const updatedScore = Math.max(10, Math.min(100, Math.round(currentScore * 0.7 + score * 0.3)));
+    // True Grounded Mastery Calculation:
+    // If first assessment for this concept, score is 100% of the new evidence.
+    // If previously assessed, blend 60% prior mastery + 40% new evidence.
+    const isFirstAssessment = !mastery || !mastery.last_tested_at || history.length === 0;
+    const currentScore = (mastery && !isFirstAssessment) ? mastery.mastery_score : score;
+    const updatedScore = isFirstAssessment
+      ? Math.max(0, Math.min(100, Math.round(score)))
+      : Math.max(0, Math.min(100, Math.round(currentScore * 0.6 + score * 0.4)));
 
     let status = 'stable';
-    if (updatedScore > currentScore || (updatedScore >= currentScore && updatedScore >= 75)) {
+    if (updatedScore >= 80) {
       status = 'improving';
-    } else if (updatedScore < currentScore - 2 || updatedScore < 60) {
+    } else if (updatedScore < 60) {
       status = 'needs_attention';
+    } else if (updatedScore >= currentScore) {
+      status = 'improving';
     }
 
     history.push({ date: todayStr, score: updatedScore });
@@ -27,8 +45,10 @@ class MasteryService {
 
     if (mastery) {
       db.update('concept_mastery', (m) => m.id === mastery.id, {
+        concept_id: cId,
+        concept_name: cName,
         mastery_score: updatedScore,
-        confidence: 0.85,
+        confidence: 0.9,
         status,
         history,
         last_tested_at: new Date().toISOString()
@@ -40,12 +60,20 @@ class MasteryService {
         concept_id: cId,
         concept_name: cName,
         mastery_score: updatedScore,
-        confidence: 0.85,
+        confidence: 0.9,
         status,
         history,
         last_tested_at: new Date().toISOString()
       });
     }
+
+    // Sync computed average mastery to the project record so all dashboards match
+    const allProjectMasteries = db.find('concept_mastery', (m) => m.project_id === projectId);
+    const testedMasteries = allProjectMasteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+    const newProjectAvg = testedMasteries.length > 0
+      ? Math.round(testedMasteries.reduce((a, b) => a + b.mastery_score, 0) / testedMasteries.length)
+      : 0;
+    db.update('projects', (p) => p.id === projectId, { average_mastery: newProjectAvg });
 
     // Repeated mistake workflow
     if (!isCorrect) {
@@ -55,7 +83,7 @@ class MasteryService {
     // Regenerate recommendations with fresh evidence
     await this.generateProjectRecommendations(projectId, userId);
 
-    return { updatedScore, status };
+    return { updatedScore, status, projectAverageMastery: newProjectAvg };
   }
 
   static async handleMistake(projectId, userId, conceptName, questionPrompt, userAnswer) {

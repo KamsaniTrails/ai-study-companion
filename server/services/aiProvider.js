@@ -36,20 +36,20 @@ class AiProviderService {
     try {
       if (this.config.geminiApiKey && this.config.provider === 'gemini') {
         responseText = await this.callGemini(options);
-        modelUsed = 'gemini-3.1-pro-preview';
+        modelUsed = options.modelOverride || 'gemini-1.5-pro';
       } else if (this.config.openaiApiKey && this.config.provider === 'openai') {
         responseText = await this.callOpenAI(options);
         modelUsed = 'gpt-4o-mini';
       } else {
         responseText = await this.simulateHighFidelityAI(options);
-        modelUsed = 'gemini-3.1-neural-engine';
+        modelUsed = 'local-neural-simulator';
       }
       tokensCompletion = Math.max(15, Math.floor(responseText.length / 4));
     } catch (err) {
-      //fallback to local simulation if external key fails
+      // fallback to local simulation if external key fails
       console.warn('External AI call failed, falling back to local JS engine:', err.message);
       responseText = await this.simulateHighFidelityAI(options);
-      modelUsed = 'gemini-3.1-neural-engine';
+      modelUsed = 'local-neural-simulator';
       tokensCompletion = Math.max(15, Math.floor(responseText.length / 4));
       status = 'success';
     }

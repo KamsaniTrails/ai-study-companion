@@ -35,12 +35,12 @@ export const GrowthView = ({ projectId, onSelectTab }) => {
   const fetchData = async () => {
     try {
       const [mRes, rRes, gRes] = await Promise.all([
-        fetch('/api/projects/' + projectId + '/mastery').then((r) => r.json()),
-        fetch('/api/projects/' + projectId + '/recommendations').then((r) => r.json()),
-        fetch('/api/projects/' + projectId + '/concept-graph').then((r) => r.json())
+        fetch('/api/projects/' + projectId + '/mastery').then((r) => r.json()).catch(() => ({ masteries: [] })),
+        fetch('/api/projects/' + projectId + '/recommendations').then((r) => r.json()).catch(() => ({ recommendations: [] })),
+        fetch('/api/projects/' + projectId + '/concept-graph').then((r) => r.json()).catch(() => null)
       ]);
-      setMasteries(mRes.masteries || []);
-      setRecommendations(rRes.recommendations || []);
+      setMasteries(mRes?.masteries || []);
+      setRecommendations(rRes?.recommendations || []);
       setConceptGraph(gRes);
     } catch (err) {
       console.error(err);
@@ -85,8 +85,9 @@ export const GrowthView = ({ projectId, onSelectTab }) => {
   const stableList = masteries.filter((m) => m.status === 'stable');
   const needsAttentionList = masteries.filter((m) => m.status === 'needs_attention' || m.mastery_score < 65);
 
-  const avgMastery = masteries.length > 0
-    ? Math.round(masteries.reduce((a, b) => a + b.mastery_score, 0) / masteries.length)
+  const testedMasteries = masteries.filter((m) => m.last_tested_at || (m.history && m.history.length > 0));
+  const avgMastery = testedMasteries.length > 0
+    ? Math.round(testedMasteries.reduce((a, b) => a + b.mastery_score, 0) / testedMasteries.length)
     : 0;
 
   const filteredMasteries = activeFilter === 'improving'

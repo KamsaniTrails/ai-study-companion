@@ -361,9 +361,22 @@ async function run() {
   assert(emptyQuery.hasSufficientEvidence === false, 'Project with 0 documents flagged with insufficient evidence');
   assert(emptyQuery.reason === 'NO_DOCUMENTS', 'Identifies exact reason as NO_DOCUMENTS');
 
+  console.log('\n[14. Continuous AI Evaluation Suite (15-Question Empirical Benchmark)]');
+  const { EvaluationSuite } = require('./services/evaluationSuite');
+  const bench = await EvaluationSuite.runFullBenchmark('project_transformers');
+  assert(bench.summary.total === 15, 'Evaluates full 15-question comprehensive test suite');
+  assert(bench.summary.passed === 15, 'All 15 benchmark questions pass successfully');
+  assert(bench.summary.groundedPrecision === '100%', 'Grounded query precision reaches 100% (5/5)');
+  assert(bench.summary.refusalRate === '100%', 'Out-of-scope refusal rate reaches 100% (5/5)');
+  assert(bench.summary.rubricAccuracy === '100%', 'Assessment rubric edge case accuracy reaches 100% (5/5)');
+  assert(bench.summary.status === 'ALL_BENCHMARKS_PASSING', 'Overall evaluation status marked ALL_BENCHMARKS_PASSING');
+  assert(bench.summary.avgTotalLatencyMs > 0, `Measured empirical latency recorded (${bench.summary.avgTotalLatencyMs}ms)`);
+
   console.log('\n=======================================================');
   console.log(` SUMMARY: ${passed} / ${total} TESTS PASSED`);
   console.log('=======================================================\n');
+
+  process.exit(0);
 }
 
 run();

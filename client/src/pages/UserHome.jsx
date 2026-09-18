@@ -60,10 +60,10 @@ export const UserHome = ({
     }
   }, [primaryProject]);
 
-  const totalMaterials = projects.reduce((acc, p) => acc + (p.material_count || 0), 0);
-  const avgMastery = projects.length > 0
-    ? Math.round(projects.reduce((acc, p) => acc + (p.average_mastery || 70), 0) / projects.length)
-    : 78;
+  const testedProjects = projects.filter((p) => p.average_mastery !== undefined && p.average_mastery !== null && p.average_mastery > 0);
+  const avgMastery = testedProjects.length > 0
+    ? Math.round(testedProjects.reduce((acc, p) => acc + p.average_mastery, 0) / testedProjects.length)
+    : 0;
 
   const attentionConcepts = masteries.filter(
     (m) => m.status === 'needs_attention' || m.mastery_score < 70
@@ -192,7 +192,7 @@ export const UserHome = ({
                 Continue Learning
               </span>
               <span className="badge badge-indigo">
-                {primaryProject.average_mastery || 78}% Mastery
+                {primaryProject.average_mastery !== undefined && primaryProject.average_mastery > 0 ? `${primaryProject.average_mastery}% Mastery` : 'Not Assessed'}
               </span>
             </div>
 
@@ -409,8 +409,8 @@ export const UserHome = ({
                 >
                   {proj.space_name || 'AI Space'}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#4f46e5' }}>
-                  {proj.average_mastery || 75}%
+                <span style={{ fontSize: 12, fontWeight: 700, color: (proj.average_mastery && proj.average_mastery > 0) ? '#4f46e5' : '#94a3b8' }}>
+                  {proj.average_mastery !== undefined && proj.average_mastery > 0 ? `${proj.average_mastery}%` : '0%'}
                 </span>
               </div>
 

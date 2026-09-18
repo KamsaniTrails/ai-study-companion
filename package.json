@@ -5,12 +5,30 @@
   "scripts": {
     "install:all": "npm install --prefix server --include=dev && npm install --prefix client --include=dev",
     "build:client": "npm run build --prefix client",
-    "build": "npm run install:all && npm run build:client",
+    "build": "npm --prefix client install && npm run build --prefix client",
     "start": "node server/index.js",
     "start:client": "npm run dev --prefix client",
     "start:server": "npm start --prefix server",
     "test": "npm test --prefix server",
     "lint:security": "npm run lint:security --prefix server"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mongodb": "^7.6.0",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.10",
+    "pdf-parse": "^2.4.5",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.5.1",
+    "@types/uuid": "^10.0.0",
+    "vercel": "^59.23.1"
   },
   "keywords": [
     "ai",
@@ -18,7 +36,8 @@
     "rag",
     "edtech",
     "react",
-    "nodejs"
+    "nodejs",
+    "vercel"
   ],
   "author": "Engineering Candidate",
   "license": "ISC"

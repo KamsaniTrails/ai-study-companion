@@ -254,16 +254,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 
   <div class="clean-header-banner">
-    <div class="badge-row">
-      <span class="badge-tag highlight">Production Live</span>
-      <span class="badge-tag">PRD Sec 7, 8, 9, 10, 14 &amp; 15 Compliant</span>
-      <span class="badge-tag">Zero-Hallucination RAG</span>
-      <span class="badge-tag">50/50 Tests Passing</span>
-    </div>
     <div class="banner-title">AI Study Companion — Product AI Documentation</div>
     <div class="banner-subtitle">Official Runtime AI Specification &bull; Cognitive Science Architecture, RAG Pipeline &amp; Rubrics</div>
     <div class="banner-meta">
-      <div><strong>Deployment:</strong> https://ai-study-companion-1-flkl.onrender.com/</div>
       <div><strong>Candidate:</strong> Antigravity Engineering Candidate</div>
       <div><strong>Specification:</strong> Core Runtime Product AI Deliverable</div>
     </div>

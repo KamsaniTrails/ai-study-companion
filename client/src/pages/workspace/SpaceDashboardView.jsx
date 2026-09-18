@@ -292,7 +292,7 @@ export const SpaceDashboardView = ({
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span className="badge badge-indigo">
-                    {proj.average_mastery || 75}% Mastery
+                    {proj.average_mastery !== undefined && proj.average_mastery > 0 ? `${proj.average_mastery}% Mastery` : 'Not Assessed'}
                   </span>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button
