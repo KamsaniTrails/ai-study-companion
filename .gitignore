@@ -35,3 +35,15 @@ Thumbs.db
 .idea/
 
 .vercel
+
+# Exclude PDFs from Git
+*.pdf
+
+# Documentation Markdown files (Keep README.md)
+ARCHITECTURE.md
+DEPLOYMENT.md
+ENGINEERING_DECISIONS.md
+FINAL_SUBMISSION.md
+PARTNER_VISION.md
+PROMPTS.md
+docs/*.md
